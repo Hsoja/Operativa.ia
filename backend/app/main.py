@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.endpoints import router
+
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
     title="Operativa.ia API",
@@ -16,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Conectar las rutas del agente conversacional
+app.include_router(router)
 
 
 @app.get("/")
