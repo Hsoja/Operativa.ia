@@ -1,7 +1,27 @@
 """Módulo del Agente Conversacional - Operativa.ia
 
-Define el comportamiento, personalidad y reglas del agente de IA para la clínica.
+Conexión en tiempo real con la API de Groq (Llama 3) para la atención de pacientes.
 """
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from groq import Groq
+
+# Buscar el archivo .env tanto en la raíz como en la carpeta backend
+base_dir = Path(__file__).resolve().parent.parent.parent
+env_root = base_dir / ".env"
+env_backend = base_dir / "backend" / ".env"
+
+if env_backend.exists():
+    load_dotenv(dotenv_path=env_backend)
+elif env_root.exists():
+    load_dotenv(dotenv_path=env_root)
+else:
+    load_dotenv()
+
+# Obtener la API key
+api_key = os.getenv("GROQ_API_KEY")
 
 SYSTEM_PROMPT_CLINICA = """
 Eres Sofía, la asistente virtual de Inteligencia Artificial de la 'Clínica Dental Sonrisas'.
@@ -21,20 +41,44 @@ Reglas de comportamiento:
 
 
 def get_system_prompt() -> str:
-    """Devuelve el System Prompt configurado para el agente de la clínica."""
+    """Devuelve el System Prompt configurado para el agente."""
     return SYSTEM_PROMPT_CLINICA.strip()
 
 
 def process_patient_message(message: str) -> dict:
-    """Estructura preliminar para procesar el mensaje del paciente.
+    """Envía el mensaje del paciente a Groq (Llama 3) y retorna la respuesta generada por la IA."""
+    if not api_key:
+        return {
+            "status": "error",
+            "user_message": message,
+            "agent_response": (
+                "⚠️ No se encontró la variable GROQ_API_KEY en tu archivo .env. "
+                "Por favor verifica que el archivo exista y contenga tu clave."
+            ),
+        }
 
-    (Más adelante conectaremos este servicio con la API de Groq/OpenAI).
-    """
-    return {
-        "user_message": message,
-        "intent": "agendar_cita",
-        "agent_response": (
-            "¡Hola! Con gusto te ayudo a agendar tu cita. "
-            "¿Cuál es tu nombre completo y qué día prefieres?"
-        ),
-    }
+    try:
+        groq_client = Groq(api_key=api_key)
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT_CLINICA},
+                {"role": "user", "content": message},
+            ],
+            temperature=0.7,
+            max_tokens=500,
+        )
+
+        agent_response = completion.choices[0].message.content
+
+        return {
+            "status": "success",
+            "user_message": message,
+            "agent_response": agent_response,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "user_message": message,
+            "agent_response": f"Lo siento, ocurrió un error al procesar tu solicitud: {str(e)}",
+        }

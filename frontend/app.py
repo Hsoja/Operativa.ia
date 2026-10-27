@@ -1,9 +1,20 @@
 """Panel de Control (Frontend) - Operativa.ia
 
-Interfaz interactiva construida con Streamlit para la gestión de citas y métricas.
+Interfaz interactiva en Streamlit conectada con la IA en tiempo real.
 """
 
+import os
+import sys
 import streamlit as st
+
+# Ruta absoluta hacia la carpeta 'backend/app' para evitar conflictos de nombres
+backend_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "backend", "app")
+)
+if backend_path not in sys.path:
+    sys.path.append(backend_path)
+
+from services.agent import process_patient_message
 
 # Configuración de la página
 st.set_page_config(
@@ -25,8 +36,8 @@ col4.metric(label="Ingresos Salvados", value="$2,150 USD", delta="+$450 hoy")
 
 st.divider()
 
-# Layout de dos columnas: Tabla de Citas y Simulación de Chat
-col_left, col_right = st.columns([1, 1])
+# Layout de dos columnas
+col_left, col_right = st.columns(2)
 
 with col_left:
     st.subheader("📅 Citas Agendadas Recientemente")
@@ -53,7 +64,7 @@ with col_left:
     st.dataframe(citas_demo, use_container_width=True)
 
 with col_right:
-    st.subheader("💬 Simulación de Chat con Sofía (IA)")
+    st.subheader("💬 Chat en Vivo con Sofía (IA)")
     user_input = st.text_input(
         "Escribe una consulta como paciente:",
         placeholder="Hola, quisiera agendar una limpieza dental...",
@@ -62,10 +73,8 @@ with col_right:
     if st.button("Enviar Mensaje"):
         if user_input:
             st.write(f"👤 **Paciente:** {user_input}")
-            st.info(
-                "🤖 **Sofía (Operativa.ia):** ¡Hola! Con gusto te ayuda a agendar "
-                "tu limpieza. Tengo disponibilidad mañana a las 10:00 AM y a las 3:00 PM. "
-                "¿Cuál horario prefieres?"
-            )
+            with st.spinner("Sofía está pensando..."):
+                res = process_patient_message(user_input)
+                st.info(f"🤖 **Sofía (Operativa.ia):**\n\n{res['agent_response']}")
         else:
             st.warning("Por favor escribe un mensaje antes de enviar.")
