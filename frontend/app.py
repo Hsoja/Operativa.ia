@@ -1,80 +1,120 @@
 """Panel de Control (Frontend) - Operativa.ia
 
-Interfaz interactiva en Streamlit conectada con la IA en tiempo real.
+Interfaz interactiva en Streamlit integrada con Google Calendar y chat en tiempo real.
 """
 
-import os
 import sys
+from datetime import datetime, timedelta
+from pathlib import Path
 import streamlit as st
 
-# Ruta absoluta hacia la carpeta 'backend/app' para evitar conflictos de nombres
-backend_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "backend", "app")
-)
-if backend_path not in sys.path:
-    sys.path.append(backend_path)
+# Conectar la carpeta backend/app directamente para evitar conflictos de nombres
+BASE_DIR = Path(__file__).resolve().parent.parent
+backend_app_path = BASE_DIR / "backend" / "app"
 
-from services.agent import process_patient_message
+if str(backend_app_path) not in sys.path:
+    sys.path.append(str(backend_app_path))
+
+from services.calendar_service import create_appointment, get_calendar_service
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Operativa.ia - Dashboard",
-    page_icon="🚀",
+    page_title="Operativa.ia - Panel de Control",
+    page_icon="🤖",
     layout="wide",
 )
 
-# Encabezado principal
-st.title("🚀 Operativa.ia - Panel de Control")
-st.caption("Sistema de Automatización Operativa y Atención 24/7 para Clínicas")
+st.title("🤖 Operativa.ia - Panel de Control")
 
-# Métricas en tiempo real
+# 1. Métricas Principales
 col1, col2, col3, col4 = st.columns(4)
-col1.metric(label="Llamadas Atendidas 24/7", value="42", delta="+12 esta semana")
-col2.metric(label="Citas Agendadas", value="18", delta="+5 hoy")
-col3.metric(label="Tasa de Conversión", value="42.8%", delta="+3.2%")
-col4.metric(label="Ingresos Salvados", value="$2,150 USD", delta="+$450 hoy")
+col1.metric("Llamadas Atendidas", "42")
+col2.metric("Citas Agendadas", "18")
+col3.metric("Tasa de Conversión", "42.8%")
+col4.metric("Ingresos Salvados", "$2,150 USD")
 
 st.divider()
 
-# Layout de dos columnas
-col_left, col_right = st.columns(2)
+# 2. Vista de Citas Próximas desde Google Calendar
+st.subheader("📅 Citas Agendadas Recientemente")
 
-with col_left:
-    st.subheader("📅 Citas Agendadas Recientemente")
-    citas_demo = [
-        {
-            "Paciente": "María García",
-            "Tratamiento": "Limpieza Dental",
-            "Fecha": "Mañana 10:00 AM",
-            "Estado": "Confirmada",
-        },
-        {
-            "Paciente": "Carlos López",
-            "Tratamiento": "Ortodoncia",
-            "Fecha": "Mañana 11:30 AM",
-            "Estado": "Confirmada",
-        },
-        {
-            "Paciente": "Ana Martínez",
-            "Tratamiento": "Blanqueamiento",
-            "Fecha": "Mañana 03:00 PM",
-            "Estado": "Pendiente de Anticipo",
-        },
-    ]
-    st.dataframe(citas_demo, use_container_width=True)
-
-with col_right:
-    st.subheader("💬 Chat en Vivo con Sofía (IA)")
-    user_input = st.text_input(
-        "Escribe una consulta como paciente:",
-        placeholder="Hola, quisiera agendar una limpieza dental...",
+try:
+    service = get_calendar_service()
+    events_result = (
+        service.events()
+        .list(
+            calendarId="primary",
+            maxResults=5,
+            singleEvents=True,
+            orderBy="startTime",
+        )
+        .execute()
     )
+    events = events_result.get("items", [])
 
-    if st.button("Enviar Mensaje"):
-        if user_input:
-            st.write(f"👤 **Paciente:** {user_input}")
-            with st.spinner("Sofía está pensando..."):
-                res = process_patient_message(user_input)
-                st.info(f"🤖 **Sofía (Operativa.ia):**\n\n{res['agent_response']}")
-        else:
-            st.warning("Por favor escribe un mensaje antes de enviar.")
+    if events:
+        for event in events:
+            start = event["start"].get("dateTime", event["start"].get("date"))
+            st.write(f"📌 **{event.get('summary', 'Sin título')}** — {start}")
+    else:
+        st.info("No hay citas agendadas próximas en tu calendario.")
+except Exception as e:
+    st.error(f"Error al cargar citas de Google Calendar: {e}")
+
+st.divider()
+
+# 3. Interfaz de Chat interactiva con Sofía
+st.subheader("💬 Chat con Sofía (Asistente Virtual)")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "¡Hola! Soy Sofía de Operativa.ia. ¿En qué puedo ayudarte hoy?",
+        }
+    ]
+
+# Mostrar historial de conversación
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+# Cuadro de entrada de texto
+if prompt := st.chat_input("Escribe un mensaje a Sofía..."):
+    # Guardar y mostrar mensaje del usuario
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    # Respuesta de Sofía y agendamiento automático
+    with st.chat_message("assistant"):
+        with st.spinner("Sofía está procesando tu solicitud..."):
+            prompt_lower = prompt.lower()
+            if "agendar" in prompt_lower or "cita" in prompt_lower:
+                # Hora sugerida para mañana a las 11:00 AM
+                start_time = (datetime.now() + timedelta(days=1)).strftime(
+                    "%Y-%m-%dT11:00:00"
+                )
+                res = create_appointment(
+                    summary=f"Cita: {prompt[:30]}...",
+                    description=f"Agendado automáticamente vía Sofía Chat: {prompt}",
+                    start_time_iso=start_time,
+                )
+                if res.get("status") == "success":
+                    reply = (
+                        f"✅ **¡Cita agendada exitosamente en tu Google Calendar!**\n\n"
+                        f"📌 **Resumen:** {res['summary']}\n"
+                        f"📅 **Fecha y Hora:** {res['start']}"
+                    )
+                else:
+                    reply = f"⚠️ No se pudo registrar en el calendario: {res.get('message')}"
+            else:
+                reply = (
+                    f"Hola, recibí tu mensaje: '{prompt}'. Si deseas agendar una cita, "
+                    f"dime algo como 'Quiero agendar una cita para mañana'."
+                )
+
+            st.write(reply)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": reply}
+            )

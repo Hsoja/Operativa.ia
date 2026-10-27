@@ -1,12 +1,14 @@
 # Variables de entorno y claves secretas 
-.env 
+.env
 *.env
+credentials.json
+token.json
 
 # Python* 
 __pycache__/
-*.py[cod] 
+*.py[cod]
 venv/
-.venv/ 
+.venv/
 
 # Node.js / Frontend 
 node_modules/ 
