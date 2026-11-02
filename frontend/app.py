@@ -9,12 +9,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import streamlit as st
 
-# Conectar la carpeta backend para reutilizar sus servicios
+# Conectar la carpeta backend para reutilizar sus servicios. Debe ir primero en la ruta:
+# este archivo también se llama "app" y taparía al paquete del backend.
 BASE_DIR = Path(__file__).resolve().parent.parent
 backend_path = BASE_DIR / "backend"
 
 if str(backend_path) not in sys.path:
-    sys.path.append(str(backend_path))
+    sys.path.insert(0, str(backend_path))
 
 from app.core.config import get_settings
 from app.core.logs import configure_logging, security_event

@@ -1,5 +1,7 @@
 """El panel de Streamlit exige inicio de sesión y no muestra datos antes (puntos 1, 5)."""
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -59,3 +61,9 @@ def test_panel_session_expires(panel):
     panel.session_state["admin_started_at"] = 1
     panel = panel.run()
     assert len(panel.metric) == 0
+
+
+def test_panel_imports_backend_when_run_as_a_script():
+    """Sin el pythonpath de pytest, frontend/app.py no debe taparse a sí mismo el paquete `app`."""
+    result = subprocess.run([sys.executable, PANEL], capture_output=True, text=True, cwd=Path(PANEL).parent.parent)
+    assert result.returncode == 0, result.stderr[-500:]
