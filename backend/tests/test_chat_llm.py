@@ -135,7 +135,7 @@ def test_system_prompt_leak_blocked(client, groq):
     assert r.json()["agent_response"] == llm_guard.BLOCKED_REPLY
 
 
-@pytest.mark.parametrize("secret", ["gsk_abcdefgh12345678", "AIzaSyABCDEFGH123", "sk-abcdefgh1234"])
+@pytest.mark.parametrize("secret", ["gsk_" + "abcdefgh12345678", "AIza" + "SyABCDEFGH123", "sk-" + "abcdefgh1234"])
 def test_secret_shaped_output_blocked(client, groq, secret):
     groq.reply(f"La llave es {secret}")
     assert secret not in client.post("/api/v1/chat", json={"message": "Hola"}).text
