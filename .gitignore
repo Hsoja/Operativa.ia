@@ -6,3 +6,17 @@ __pycache__/
 .venv/
 node_modules/
 dist/
+credentials.json
+token.json
+client_secret*.json
+*.db
+*.db-*
+*.sqlite*
+*.pem
+*.key
+*.bak
+*.dump
+.env.*
+!.env.example
+backend/logs/
+.pytest_cache/
