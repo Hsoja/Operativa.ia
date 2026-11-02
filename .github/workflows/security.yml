@@ -1,0 +1,43 @@
+name: security
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: pip-audit -r requirements.lock
+      - run: bandit -q -r app ../frontend/app.py --severity-level medium
+      - run: bash ../scripts/scan_exposed_files.sh
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (historial completo)
+        run: >
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0
+          git /repo --log-opts=--all --redact=100 --no-banner
+
+  semgrep:
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:1.140.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep scan --config p/python --error --metrics=off backend/app frontend/app.py

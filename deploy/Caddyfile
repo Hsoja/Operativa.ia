@@ -1,0 +1,28 @@
+# Proxy de producción. Caddy obtiene el certificado y redirige HTTP a HTTPS por sí solo.
+# Uso: DOMAIN=app.ejemplo.com caddy run --config deploy/Caddyfile
+# Solo se publican estas rutas: el proxy nunca sirve archivos del disco (.env, .git, secrets/).
+{$DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+	}
+
+	request_body {
+		max_size 1MB
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		header Content-Security-Policy "frame-ancestors 'none'"
+		reverse_proxy 127.0.0.1:8501
+	}
+}
