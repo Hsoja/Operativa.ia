@@ -1,0 +1,13 @@
+# Se usa al ejecutar `streamlit run frontend/app.py` desde la raíz del proyecto.
+[server]
+address = "localhost"
+enableXsrfProtection = true
+enableCORS = true
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"

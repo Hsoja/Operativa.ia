@@ -4,18 +4,28 @@ Interfaz interactiva en Streamlit integrada con Google Calendar y chat en tiempo
 """
 
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import streamlit as st
 
-# Conectar la carpeta backend/app directamente para evitar conflictos de nombres
+# Conectar la carpeta backend para reutilizar sus servicios
 BASE_DIR = Path(__file__).resolve().parent.parent
-backend_app_path = BASE_DIR / "backend" / "app"
+backend_path = BASE_DIR / "backend"
 
-if str(backend_app_path) not in sys.path:
-    sys.path.append(str(backend_app_path))
+if str(backend_path) not in sys.path:
+    sys.path.append(str(backend_path))
 
-from services.calendar_service import create_appointment, get_calendar_service
+from app.core.config import get_settings
+from app.core.logs import configure_logging, security_event
+from app.services import auth
+from app.services.calendar_service import (
+    CalendarDisabledError,
+    create_appointment,
+    get_calendar_service,
+)
+
+MAX_CHAT_CHARS = 1900
 
 # Configuración de la página
 st.set_page_config(
@@ -24,9 +34,31 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🤖 Operativa.ia - Panel de Control")
+# Este panel muestra citas y crea eventos: nada se renderiza sin iniciar sesión
+configure_logging()
+session_ttl = get_settings().session_ttl_minutes * 60
+started_at = st.session_state.get("admin_started_at")
+if started_at is None or time.time() - started_at > session_ttl:
+    st.session_state.pop("admin_started_at", None)
+    st.title("🤖 Operativa.ia - Panel de Control")
+    with st.form("login"):
+        username = st.text_input("Usuario", max_chars=64)
+        password = st.text_input("Contraseña", type="password", max_chars=auth.MAX_PASSWORD_LENGTH)
+        submitted = st.form_submit_button("Iniciar sesión")
+    if submitted:
+        if auth.authenticate(username, password, client="panel"):
+            st.session_state["admin_started_at"] = time.time()
+            st.rerun()
+        st.error("Credenciales inválidas.")
+    st.stop()
 
-# 1. Métricas Principales
+st.title("🤖 Operativa.ia - Panel de Control")
+if st.button("Cerrar sesión"):
+    st.session_state.clear()
+    st.rerun()
+
+# 1. Métricas Principales (datos ilustrativos del prototipo)
+st.caption("Métricas ilustrativas del prototipo, no son datos reales.")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Llamadas Atendidas", "42")
 col2.metric("Citas Agendadas", "18")
@@ -55,11 +87,15 @@ try:
     if events:
         for event in events:
             start = event["start"].get("dateTime", event["start"].get("date"))
-            st.write(f"📌 **{event.get('summary', 'Sin título')}** — {start}")
+            # st.text no interpreta Markdown: el título del evento puede venir de un usuario
+            st.text(f"📌 {event.get('summary', 'Sin título')} — {start}")
     else:
         st.info("No hay citas agendadas próximas en tu calendario.")
+except CalendarDisabledError:
+    st.info("Google Calendar está desactivado. Actívalo con CALENDAR_ENABLED=true.")
 except Exception as e:
-    st.error(f"Error al cargar citas de Google Calendar: {e}")
+    security_event("calendar_error", "ERROR", error=type(e).__name__)
+    st.error("No se pudieron cargar las citas de Google Calendar.")
 
 st.divider()
 
@@ -77,14 +113,14 @@ if "messages" not in st.session_state:
 # Mostrar historial de conversación
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        st.text(msg["content"])
 
 # Cuadro de entrada de texto
-if prompt := st.chat_input("Escribe un mensaje a Sofía..."):
+if prompt := st.chat_input("Escribe un mensaje a Sofía...", max_chars=MAX_CHAT_CHARS):
     # Guardar y mostrar mensaje del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.write(prompt)
+        st.text(prompt)
 
     # Respuesta de Sofía y agendamiento automático
     with st.chat_message("assistant"):
@@ -102,9 +138,9 @@ if prompt := st.chat_input("Escribe un mensaje a Sofía..."):
                 )
                 if res.get("status") == "success":
                     reply = (
-                        f"✅ **¡Cita agendada exitosamente en tu Google Calendar!**\n\n"
-                        f"📌 **Resumen:** {res['summary']}\n"
-                        f"📅 **Fecha y Hora:** {res['start']}"
+                        f"✅ ¡Cita agendada exitosamente en tu Google Calendar!\n\n"
+                        f"📌 Resumen: {res['summary']}\n"
+                        f"📅 Fecha y Hora: {res['start']}"
                     )
                 else:
                     reply = f"⚠️ No se pudo registrar en el calendario: {res.get('message')}"
@@ -114,7 +150,7 @@ if prompt := st.chat_input("Escribe un mensaje a Sofía..."):
                     f"dime algo como 'Quiero agendar una cita para mañana'."
                 )
 
-            st.write(reply)
+            st.text(reply)
             st.session_state.messages.append(
                 {"role": "assistant", "content": reply}
             )
