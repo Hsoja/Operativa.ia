@@ -1,20 +1,8 @@
-# Variables de entorno y claves secretas 
 .env
-*.env
-credentials.json
-token.json
-
-# Python* 
+secrets/
+backend/data/
 __pycache__/
-*.py[cod]
-venv/
+*.pyc
 .venv/
-
-# Node.js / Frontend 
-node_modules/ 
-.next/ 
-out/ 
-
-# Sistema operativo
-.DS_Store 
-Thumbs.db
+node_modules/
+dist/
