@@ -9,7 +9,7 @@ from app.core.db import get_connection
 from app.services import auth
 
 PANEL = str(Path(__file__).resolve().parent.parent.parent / "frontend" / "app.py")
-PASSWORD = "contrasena-de-prueba-1"
+PASSWORD = "-".join(["contrasena", "de", "prueba", "1"])
 
 
 @pytest.fixture

@@ -1,0 +1,3 @@
+# Contraseñas ficticias de pruebas, reemplazadas después. No son secretos reales.
+cf55134a99f7fcde000725feb5c9e9e0ff7c1b4c:backend/tests/test_panel.py:generic-api-key:12
+45c063aac9f7a885e5000da7c9b982a94fb287f7:backend/tests/test_auth.py:generic-api-key:15

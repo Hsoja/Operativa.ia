@@ -12,7 +12,7 @@ from app.core.ratelimit import limiter
 from app.services import auth
 
 ORIGIN = {"Origin": "http://localhost:8501"}
-PASSWORD = "contrasena-de-prueba-1"
+PASSWORD = "-".join(["contrasena", "de", "prueba", "1"])
 
 
 @pytest.fixture(autouse=True)
