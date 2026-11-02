@@ -1,39 +1,68 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.endpoints import router
-
-# Inicialización de la aplicación FastAPI
-app = FastAPI(
-    title="Operativa.ia API",
-    description="Motor de automatización operativa y atención 24/7 para PYMEs de servicios",
-    version="0.1.0",
-)
-
-# Configuración de CORS para permitir conexiones desde el Frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Conectar las rutas del agente conversacional
-app.include_router(router)
+from app.core.config import get_settings
+from app.core.logs import configure_logging, security_event
+from app.core.middleware import SecurityMiddleware
 
 
-@app.get("/")
-def read_root():
-    """Ruta raíz para verificar que el servidor está en línea."""
-    return {
-        "system": "Operativa.ia API",
-        "status": "online",
-        "message": "Bienvenido al motor de automatización 24/7",
-    }
+async def _validation_handler(request: Request, exc: RequestValidationError):
+    """Responde sin repetir la entrada del cliente y registra solo los campos afectados."""
+    fields = [".".join(str(p) for p in e["loc"]) for e in exc.errors()]
+    security_event("validation_rejected", "WARNING", path=request.url.path, fields=fields)
+    return JSONResponse(status_code=422, content={"detail": "Datos inválidos.", "fields": fields})
 
 
-@app.get("/health")
-def health_check():
-    """Endpoint de estado del sistema."""
-    return {"status": "healthy", "database": "connected"}
+def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging()
+
+    # Inicialización de la aplicación FastAPI
+    docs_enabled = settings.env == "development"
+    app = FastAPI(
+        title="Operativa.ia API",
+        description="Motor de automatización operativa y atención 24/7 para PYMEs de servicios",
+        version="0.1.0",
+        debug=False,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
+
+    app.add_exception_handler(RequestValidationError, _validation_handler)
+
+    # Configuración de CORS: solo orígenes explícitos, métodos y cabeceras mínimos
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.allowed_origins),
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "X-CSRF-Token"],
+    )
+    # Se agrega al final para quedar por fuera de CORS y cubrir todas las respuestas
+    app.add_middleware(SecurityMiddleware)
+
+    # Conectar las rutas del agente conversacional
+    app.include_router(router)
+
+    @app.get("/")
+    def read_root():
+        """Ruta raíz para verificar que el servidor está en línea."""
+        return {
+            "system": "Operativa.ia API",
+            "status": "online",
+            "message": "Bienvenido al motor de automatización 24/7",
+        }
+
+    @app.get("/health")
+    def health_check():
+        """Endpoint de estado del sistema."""
+        return {"status": "healthy"}
+
+    return app
+
+
+app = create_app()
