@@ -4,6 +4,7 @@ Sistema de atención 24/7, agenda y seguimiento automático para PYMES de servic
 
 ## Estructura
 - `backend/` API FastAPI (`app/main.py`, `app/api/`, `app/core/`, `app/services/`) y pruebas (`tests/`)
+- `frontend/` sitio web público (Vite, React, TypeScript, Tailwind y Motion) y logo en `frontend/public/brand/`
 - `frontend/app.py` panel de control en Streamlit
 - `deploy/Caddyfile` proxy HTTPS para producción
 - `secrets/` (ignorada por git) aquí va `credentials.json` de Google
@@ -33,6 +34,17 @@ Requiere Python 3.13.
    ```
 
 Sin `GROQ_API_KEY`, la API responde con un mensaje genérico de "no disponible".
+
+### Sitio web
+Requiere Node 20 o superior. No necesita llaves ni la API:
+```
+cd frontend
+npm install
+npm run dev
+```
+Se abre en http://localhost:5173. Con `npm test` se prueban a Sofía y el formulario, y con `npm run build` se genera la versión final en `frontend/dist/`.
+
+Por ahora, Sofía responde con la base de conocimiento local de `src/lib/sofia.ts`, y los formularios se guardan solo en el navegador con `src/lib/leads.ts`.
 
 ### Google Calendar (opcional)
 1. En Google Cloud, habilita Calendar API y crea credenciales OAuth de tipo "Aplicación de escritorio".

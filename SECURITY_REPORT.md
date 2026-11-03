@@ -4,6 +4,22 @@
 
 El repositorio no contiene la web React, `/contact`, los leads en SQLite, el modo FAQ, Gemini ni las herramientas de Sofía que describe el encargo. Lo que depende de esas partes aparece como "no aplica" (N/A). Para ese código, esta revisión no aporta ninguna garantía.
 
+## Actualización del 2 de noviembre de 2026: sitio web nuevo
+
+Se agregó un sitio React en `frontend/`, así que ya existe un paquete JS que revisar. Esta parte no cambia el backend. Los puntos 2, 5, 10 y 15 de la tabla siguen describiendo el estado anterior para el backend y el panel; esto es lo nuevo para el sitio:
+
+| Punto | Estado en el sitio | Evidencia |
+|---|---|---|
+| 2. Llaves en el navegador | Sin secretos ni variables `VITE_` | `tests/test_static_checks.py` revisa `frontend/dist` después de compilar |
+| 5. XSS | Sin `dangerouslySetInnerHTML`; el chat y los formularios se muestran como texto | Prueba en navegador con una carga XSS |
+| 10. Dependencias | `package-lock.json` y Dependabot para npm | `npm audit` sin vulnerabilidades |
+| 15. Cabeceras | **Pendiente:** `deploy/Caddyfile` aún no sirve este sitio ni le aplica una CSP | Se resuelve al desplegarlo |
+
+**Riesgos nuevos:**
+- **Datos en el navegador:** los formularios guardan nombre, correo y mensaje sin cifrar en `localStorage`. Es temporal y la Política de Privacidad lo explica, con un botón para borrarlos. Al conectar la API, hay que migrar a `POST /api/v1/contact` con la validación de servidor del punto 4.
+- **Sofía no usa IA todavía:** responde con reglas locales. Los controles de LLM de esta auditoría se aplicarán cuando el chat use la API, y antes hay que cambiar el prompt de clínica dental del backend.
+- **Textos legales:** los Términos y la Política son borradores sin revisión legal.
+
 ## Resultado
 
 | Comprobación | Resultado |

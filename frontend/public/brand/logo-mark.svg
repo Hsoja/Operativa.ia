@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Operativa.ia">
+  <defs>
+    <linearGradient id="g" x1="8" y1="58" x2="56" y2="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E5173F"/>
+      <stop offset=".55" stop-color="#FF5A1F"/>
+      <stop offset="1" stop-color="#FFB347"/>
+    </linearGradient>
+  </defs>
+  <path d="M38 9.8A23 23 0 1 0 54.3 26" fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="48.3" cy="15.7" r="5" fill="#FFB347"/>
+  <rect x="21" y="25" width="6.5" height="14" rx="3.25" fill="url(#g)"/>
+  <rect x="35.5" y="25" width="6.5" height="14" rx="3.25" fill="url(#g)"/>
+</svg>
