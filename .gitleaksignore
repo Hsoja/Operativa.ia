@@ -1,3 +1,4 @@
 # Contraseñas ficticias de pruebas, reemplazadas después. No son secretos reales.
-cf55134a99f7fcde000725feb5c9e9e0ff7c1b4c:backend/tests/test_panel.py:generic-api-key:12
-45c063aac9f7a885e5000da7c9b982a94fb287f7:backend/tests/test_auth.py:generic-api-key:15
+# Huellas actualizadas tras reescribir el historial para quitar datos personales (2026-11-05).
+062b4e78a3742c87ff383399a296bb7e0a122be3:backend/tests/test_panel.py:generic-api-key:12
+28876cb2812610ba6ad97020da1095bc1c1901bc:backend/tests/test_auth.py:generic-api-key:15
