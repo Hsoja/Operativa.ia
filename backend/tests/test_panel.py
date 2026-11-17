@@ -12,7 +12,7 @@ from app.services import calendar_service, leads, tenants
 from helpers import PASSWORD, make_tenant, make_user, reset_db
 
 PANEL = str(Path(__file__).resolve().parent.parent.parent / "frontend" / "app.py")
-LEAD = dict(name="Ana Sol", email="ana@sol.com", business="", topic="Book a demo", message="Mensaje de prueba largo", consent=True)
+LEAD = dict(name="Ana Sol", email="ana@sol.example", business="", topic="Book a demo", message="Mensaje de prueba largo", consent=True)
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def panel(client):
     luna = make_tenant("luna", "Salón Luna")
     make_user(sol, "admin", "owner")
     leads.create_lead(sol, leads.LeadIn(**LEAD))
-    leads.create_lead(luna, leads.LeadIn(**{**LEAD, "name": "Beto Luna", "email": "beto@luna.com"}))
+    leads.create_lead(luna, leads.LeadIn(**{**LEAD, "name": "Beto Luna", "email": "beto@luna.example"}))
     return AppTest.from_file(PANEL, default_timeout=30).run()
 
 
@@ -52,7 +52,7 @@ def test_panel_shows_real_metrics_and_only_own_leads(panel):
     summary = {m.label: m.value for m in panel.metric}
     assert summary["Leads (total)"] == "1" and "Mensajes de clientes (7 días)" in summary
     table = panel.dataframe[0].value
-    assert list(table["Correo"]) == ["ana@sol.com"]
+    assert list(table["Correo"]) == ["ana@sol.example"]
     assert "Clínica Sol" in panel.title[0].value
 
 

@@ -13,7 +13,7 @@ from app.services import reactivation, tenants
 from helpers import ORIGIN, login, make_tenant, make_user, reset_db
 
 SMTP = {"SMTP_HOST": "smtp.example.com", "SMTP_FROM": "hola@negocio.example", "PUBLIC_SITE_URL": "http://localhost:5173"}
-LEAD = {"name": "Ana Sol", "email": "ana@sol.com", "topic": "Book a demo", "message": "Quiero información.", "consent": True}
+LEAD = {"name": "Ana Sol", "email": "ana@sol.example", "topic": "Book a demo", "message": "Quiero información.", "consent": True}
 OLD = int(time.time()) - 200 * 86400
 CAMPAIGN = {"inactive_days": 90, "subject": "Te extrañamos", "body": "Hola {nombre}, hace tiempo que no te vemos.", "confirm": True}
 
@@ -47,7 +47,7 @@ def biz(make_client, monkeypatch):
     reset_db()
     FakeSMTP.instances = []
     monkeypatch.setattr(reactivation.smtplib, "SMTP", FakeSMTP)
-    sol = make_tenant("sol", "Clínica Sol", location="123 King St, Waterloo, ON")
+    sol = make_tenant("sol", "Clínica Sol", location="100 Example Rd, Waterloo, ON")
     luna = make_tenant("luna", "Salón Luna")
     for tenant, prefix in ((sol, "sol"), (luna, "luna")):
         make_user(tenant, f"{prefix}-admin", "admin")
@@ -109,19 +109,19 @@ def test_contacts_are_per_business(biz):
 
 def test_campaign_reaches_only_opted_in_inactive_contacts(biz):
     contact(biz.client, marketing_consent=True)
-    contact(biz.client, email="sin@consent.com")
-    contact(biz.client, email="reciente@sol.com", marketing_consent=True)
+    contact(biz.client, email="sin@consent.example")
+    contact(biz.client, email="reciente@sol.example", marketing_consent=True)
     age_contacts()
     with get_connection() as db:
-        db.execute("UPDATE contacts SET last_activity_at = ? WHERE email = 'reciente@sol.com'", (int(time.time()),))
+        db.execute("UPDATE contacts SET last_activity_at = ? WHERE email = 'reciente@sol.example'", (int(time.time()),))
     admin, h = logged(biz, "sol-admin")
     assert admin.post("/api/v1/admin/campaigns/preview", json={"inactive_days": 90}, headers=h).json() == {"eligible": 1}
     r = admin.post("/api/v1/admin/campaigns", json=CAMPAIGN, headers=h)
     assert r.status_code == 202 and r.json()["recipients"] == 1
     [message] = sent_messages()
-    assert message["To"] == "ana@sol.com" and message["Subject"] == "Te extrañamos"
+    assert message["To"] == "ana@sol.example" and message["Subject"] == "Te extrañamos"
     text = message.get_content()
-    assert "Hola Ana Sol" in text and "123 King St, Waterloo, ON" in text and "#/unsubscribe/sol/" in text
+    assert "Hola Ana Sol" in text and "100 Example Rd, Waterloo, ON" in text and "#/unsubscribe/sol/" in text
     assert message["List-Unsubscribe"].startswith("<http://localhost:5173/api/v1/public/sol/unsubscribe/")
     assert message["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert "Clínica Sol" in message["From"]
@@ -250,7 +250,7 @@ def test_no_personal_data_in_logs(biz, security_log):
     admin, h = logged(biz, "sol-admin")
     admin.post("/api/v1/admin/campaigns", json=CAMPAIGN, headers=h)
     log = json.dumps(security_log())
-    assert "ana@sol.com" not in log and "Ana Sol" not in log and "Te extrañamos" not in log
+    assert "ana@sol.example" not in log and "Ana Sol" not in log and "Te extrañamos" not in log
 
 
 def test_booking_can_record_marketing_consent(biz):
@@ -260,10 +260,10 @@ def test_booking_can_record_marketing_consent(biz):
     service = booking.create_service(biz.sol, booking.ServiceIn(name="Consulta", duration_minutes=30, deposit_cents=0))
     day = date.today() + timedelta(days=2)
     slot = booking.list_slots(tenants.get(biz.sol), booking.get_service(biz.sol, service), day)[0]
-    body = {"service_id": service, "start": slot, "name": "Beto", "email": "beto@sol.com", "consent": True, "marketing_consent": True}
+    body = {"service_id": service, "start": slot, "name": "Beto", "email": "beto@sol.example", "consent": True, "marketing_consent": True}
     assert biz.client.post("/api/v1/public/sol/bookings", json=body).status_code == 201
     with get_connection() as db:
-        assert db.execute("SELECT consent_source FROM contacts WHERE email = 'beto@sol.com'").fetchone()[0] == "booking"
+        assert db.execute("SELECT consent_source FROM contacts WHERE email = 'beto@sol.example'").fetchone()[0] == "booking"
 
 
 # --- Configuración fail-closed --------------------------------------------------------------------

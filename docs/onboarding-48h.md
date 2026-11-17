@@ -20,7 +20,7 @@ Todos los comandos se ejecutan en el servidor, desde `backend/` y con el entorno
 ```bash
 python -m app.cli list-templates
 python -m app.cli create-tenant --slug clinica-sol --name "Clínica Sol" --template dental \
-    --location "123 King St, Waterloo, ON" --timezone America/Toronto
+    --location "100 Example Rd, Waterloo, ON" --timezone America/Toronto
 python -m app.cli create-user --tenant clinica-sol --username ana --role owner   # pide la contraseña (12+)
 ```
 

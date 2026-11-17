@@ -81,7 +81,7 @@ describe("precios", () => {
 });
 
 describe("solicitud de demo", () => {
-  const steps = ["I want to book a demo", "Ana Pérez", "Clínica Sol", "ana@sol.com", "Answer common questions"];
+  const steps = ["I want to book a demo", "Ana Pérez", "Clínica Sol", "ana@sol.example", "Answer common questions"];
 
   it("pide consentimiento antes de preparar el envío", () => {
     const reply = say(...steps);
@@ -93,7 +93,7 @@ describe("solicitud de demo", () => {
   it("con un sí prepara la solicitud completa", () => {
     const reply = say(...steps, "yes");
     expect(reply.state.booking).toBeNull();
-    expect(reply.lead).toMatchObject({ name: "Ana Pérez", business: "Clínica Sol", email: "ana@sol.com", consent: true });
+    expect(reply.lead).toMatchObject({ name: "Ana Pérez", business: "Clínica Sol", email: "ana@sol.example", consent: true });
   });
 
   it.each(["ok wait", "yes but later", "maybe", "sí pero", "what data?"])("una respuesta ambigua no es consentimiento: %s", (answer) => {
@@ -126,7 +126,7 @@ describe("solicitud de demo", () => {
     expect(reply.text).toMatch(/sent to the team/);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/v1/public/operativa/contact");
-    expect(JSON.parse(init.body)).toMatchObject({ source: "sofia", consent: true, email: "ana@sol.com" });
+    expect(JSON.parse(init.body)).toMatchObject({ source: "sofia", consent: true, email: "ana@sol.example" });
     expect(init.credentials).toBe("omit");
   });
 });
@@ -168,7 +168,7 @@ describe("conexión con la API", () => {
 });
 
 describe("envío del formulario", () => {
-  const lead = { name: "Ana", email: "ana@sol.com", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
+  const lead = { name: "Ana", email: "ana@sol.example", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
 
   it.each([
     [201, "sent"],
@@ -192,7 +192,7 @@ describe("envío del formulario", () => {
 });
 
 describe("formulario", () => {
-  const good = { name: "Ana", email: "ana@sol.com", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
+  const good = { name: "Ana", email: "ana@sol.example", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
 
   it("acepta datos válidos", () => {
     expect(validateLead(good)).toEqual({});

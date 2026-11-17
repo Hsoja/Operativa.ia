@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const request = { service_id: 1, start: "2026-11-20T09:00", name: "Ana", email: "ana@sol.com", consent: true, marketing_consent: false };
+const request = { service_id: 1, start: "2026-11-20T09:00", name: "Ana", email: "ana@sol.example", consent: true, marketing_consent: false };
 
 describe("rutas de reserva", () => {
   it.each([

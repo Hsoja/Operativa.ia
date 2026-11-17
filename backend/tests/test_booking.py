@@ -59,7 +59,7 @@ def biz(make_client, monkeypatch):
 
 
 def book(c, service, start=SLOT, slug="sol", **extra):
-    body = {"service_id": service, "start": start, "name": "Ana Sol", "email": "ana@sol.com", "consent": True, **extra}
+    body = {"service_id": service, "start": start, "name": "Ana Sol", "email": "ana@sol.example", "consent": True, **extra}
     return c.post(f"/api/v1/public/{slug}/bookings", json=body)
 
 
@@ -202,7 +202,7 @@ def test_booking_status_by_ref_has_no_personal_data(biz):
 def test_personal_data_never_logged(biz, security_log):
     book(biz.client, biz.cleaning)
     log = json.dumps(security_log())
-    assert "ana@sol.com" not in log and "Ana Sol" not in log
+    assert "ana@sol.example" not in log and "Ana Sol" not in log
 
 
 # --- Webhook de Stripe ----------------------------------------------------------------------------
@@ -402,7 +402,7 @@ def test_concurrent_bookings_cannot_double_book(biz):
     from app.services import tenants
 
     tenant = tenants.get(biz.sol)
-    payload = booking.BookingIn(service_id=biz.free, start=SLOT, name="Ana Sol", email="ana@sol.com", consent=True)
+    payload = booking.BookingIn(service_id=biz.free, start=SLOT, name="Ana Sol", email="ana@sol.example", consent=True)
 
     def attempt(_):
         try:
