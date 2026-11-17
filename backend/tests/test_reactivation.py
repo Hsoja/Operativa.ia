@@ -2,6 +2,7 @@
 
 import json
 import time
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -257,7 +258,8 @@ def test_booking_can_record_marketing_consent(biz):
 
     booking.set_hours(biz.sol, booking.WeeklyHours(ranges=[booking.HoursRange(weekday=d, open="09:00", close="12:00") for d in range(7)]))
     service = booking.create_service(biz.sol, booking.ServiceIn(name="Consulta", duration_minutes=30, deposit_cents=0))
-    slot = booking.list_slots(tenants.get(biz.sol), booking.get_service(biz.sol, service), __import__("datetime").date.today() + __import__("datetime").timedelta(days=2))[0]
+    day = date.today() + timedelta(days=2)
+    slot = booking.list_slots(tenants.get(biz.sol), booking.get_service(biz.sol, service), day)[0]
     body = {"service_id": service, "start": slot, "name": "Beto", "email": "beto@sol.com", "consent": True, "marketing_consent": True}
     assert biz.client.post("/api/v1/public/sol/bookings", json=body).status_code == 201
     with get_connection() as db:
