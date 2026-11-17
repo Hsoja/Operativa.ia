@@ -45,7 +45,8 @@ docs/       Architecture, competitive analysis and security model
    cd backend
    python3.13 -m venv .venv && source .venv/bin/activate
    pip install -r requirements-dev.txt
-   python -m app.cli create-admin --username YOUR_USER
+   python -m app.cli create-tenant --slug my-business --name "My Business"
+   python -m app.cli create-user --tenant my-business --username YOUR_USER --role owner
    uvicorn app.main:app --reload --port 8000
    ```
 3. Start the dashboard (from the project root, with the venv active):
