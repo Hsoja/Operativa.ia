@@ -1,0 +1,39 @@
+# Blueprint de Render para la demo pública de la API (plan gratuito).
+# Uso: en Render, "New +" → "Blueprint" → conectar este repo → revisar y crear.
+# No reemplaza a deploy/Caddyfile (uso en un servidor propio con dominio); es solo
+# para el sitio de portafolio: GitHub Pages (sitio) + este servicio (API).
+#
+# Sin tarjeta para el plan gratuito. Limitación conocida: el servicio gratuito se duerme
+# tras 15 min sin tráfico; la primera visita después tarda 30-60 s en responder.
+#
+# No verificado end-to-end en Render todavía (sin cuenta en esta sesión): revisar los
+# valores al crear el Blueprint y avisar si algo no encaja con lo que muestra Render.
+services:
+  - name: operativa-api
+    type: web
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    # --no-server-header: no anuncia la versión de Uvicorn. Health check real: consulta la base.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-server-header
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: ENV
+        value: production
+      # Origen exacto del sitio en GitHub Pages. Sin comodines, sin tarjeta, no es un secreto.
+      - key: ALLOWED_ORIGINS
+        value: https://hsoja.github.io
+      # Seudonimiza IP/usuario en los logs. Render genera un valor aleatorio de 256 bits.
+      - key: IP_HASH_SALT
+        generateValue: true
+      # Crea el negocio "operativa" al arrancar si el disco efímero lo perdió entre reinicios.
+      - key: SEED_DEMO_TENANT
+        value: operativa
+      # Opcional: sin esta llave, Sofía responde con el motor local (sin IA), no falla.
+      # Render pedirá el valor solo al crear el Blueprint por primera vez; puede dejarse vacío.
+      - key: GROQ_API_KEY
+        sync: false

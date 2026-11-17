@@ -457,3 +457,30 @@ def test_browser_chosen_conversation_token_is_never_adopted(client):
     chosen = "a" * 24
     r = client.post("/api/v1/public/sol/chat", json={"message": "Hola", "conversation_id": chosen})
     assert r.json()["conversation_id"] != chosen
+
+
+# --- Siembra del negocio de demo (Render/GitHub Pages) -------------------------------------------
+
+def test_seed_demo_tenant_off_by_default(make_client):
+    make_client()  # SEED_DEMO_TENANT no está en el entorno de pruebas
+    assert tenants.get_by_slug("operativa") is None
+
+
+def test_seed_demo_tenant_creates_once_and_is_idempotent(make_client):
+    make_client(SEED_DEMO_TENANT="operativa")
+    created = tenants.get_by_slug("operativa")
+    assert created is not None and created["name"] == "Operativa.ia"
+    make_client(SEED_DEMO_TENANT="operativa")  # segundo arranque: no lo recrea ni falla
+    assert tenants.get_by_slug("operativa")["id"] == created["id"]
+
+
+def test_seed_demo_tenant_never_overwrites_existing_business(make_client):
+    make_tenant("operativa", "Ya existía")
+    make_client(SEED_DEMO_TENANT="operativa")
+    assert tenants.get_by_slug("operativa")["name"] == "Ya existía"
+
+
+@pytest.mark.parametrize("bad_slug", ["../etc", "Operativa", "a", ""])
+def test_seed_demo_tenant_ignores_invalid_slugs(make_client, bad_slug):
+    make_client(SEED_DEMO_TENANT=bad_slug)
+    assert tenants.get_by_slug(bad_slug) is None

@@ -1,14 +1,18 @@
 /**
- * Cliente de la API pública del backend propio. Sin llaves: el navegador solo conoce rutas relativas.
- * En desarrollo, Vite reenvía /api al backend; en producción, Caddy sirve sitio y API en el mismo dominio.
+ * Cliente de la API pública del backend propio. Sin llaves: el navegador solo conoce rutas relativas
+ * o, para la demo pública, la URL de la API (pública, no un secreto; se fija al compilar el sitio).
+ * En desarrollo, Vite reenvía /api al backend; en producción con Caddy, sitio y API comparten dominio.
  */
 
 /** Negocio dueño de este sitio. Es un identificador público, no un secreto. */
 export const TENANT_SLUG = "operativa";
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
+// Vacío (por defecto): rutas relativas, mismo origen. Solo se fija para el sitio estático en
+// GitHub Pages, donde la API vive en otro dominio (p. ej. Render). Nunca lleva una llave.
+const apiBaseUrl = (): string => (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const base = (slug: string) => {
   if (!SLUG.test(slug)) throw new Error("slug inválido");
-  return `/api/v1/public/${slug}`;
+  return `${apiBaseUrl()}/api/v1/public/${slug}`;
 };
 const TIMEOUT_MS = 20000;
 
