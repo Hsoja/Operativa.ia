@@ -60,12 +60,14 @@ export function Privacy() {
       <ul>
         <li><strong>Contact form:</strong> your name, email, business name (optional), topic and message.</li>
         <li><strong>Chat with Sofía:</strong> what you type, and your name, business, email and need if you request a demo.</li>
+        <li><strong>Online bookings:</strong> the service, date and time you choose, and your name and email to manage the appointment.</li>
+        <li><strong>WhatsApp messages</strong> sent to a business that uses Operativa.ia: the text of your messages. Your phone number is not stored.</li>
       </ul>
       <p>Please don't share passwords, payment details, health information or other sensitive data.</p>
       <h2>2. Where it's stored and for how long</h2>
       <p>Contact and demo requests are sent to our server only after you accept this policy, and are kept until your request is handled or you ask us to delete them. Chat messages are stored on our server so the assistant can follow the conversation, and are deleted automatically after 90 days without activity. Nothing is saved in your browser's storage.</p>
       <h2>3. Who processes it</h2>
-      <p>Chat messages are processed by our AI provider (Groq) to generate Sofía's answers. We don't send your contact details to that provider. Server logs record technical events only, with identifiers replaced by pseudonyms.</p>
+      <p>Chat messages are processed by our AI provider (Groq) to generate Sofía's answers. We don't send your contact details to that provider. Deposits are paid on Stripe's secure checkout: your card details go directly to Stripe and never reach our servers; Stripe receives your email and the deposit amount. WhatsApp messages travel through Meta's WhatsApp Business platform. Server logs record technical events only, with identifiers replaced by pseudonyms.</p>
       <h2>4. Why we use it</h2>
       <p>To answer your request and prepare a demo if you ask for one. We don't sell your information or use it for advertising.</p>
       <h2>5. Cookies and tracking</h2>
