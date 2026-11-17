@@ -48,8 +48,9 @@ def test_panel_rejects_wrong_password(panel):
 
 def test_panel_shows_real_metrics_and_only_own_leads(panel):
     panel = _login(panel, PASSWORD)
-    assert not panel.exception and len(panel.metric) == 4
-    assert panel.metric[0].value == "1"
+    assert not panel.exception
+    summary = {m.label: m.value for m in panel.metric}
+    assert summary["Leads (total)"] == "1" and "Mensajes de clientes (7 días)" in summary
     table = panel.dataframe[0].value
     assert list(table["Correo"]) == ["ana@sol.com"]
     assert "Clínica Sol" in panel.title[0].value
@@ -180,3 +181,19 @@ def test_staff_sees_coverage_read_only(client):
     panel = _login(AppTest.from_file(PANEL, default_timeout=30).run(), PASSWORD)
     assert all(t.disabled for t in panel.text_area if t.label.startswith(("Prefijos", "Ciudades", "Aseguradoras")))
     assert _form_button(panel, "Guardar cobertura").disabled
+
+
+def test_panel_reactivation_needs_confirmation_and_respects_casl(panel, monkeypatch):
+    from app.services import reactivation
+
+    sent = []
+    monkeypatch.setattr(reactivation, "deliver", lambda *args: sent.append(args) or {"sent": 0, "failed": 0})
+    panel = _login(panel, PASSWORD)
+    [t for t in panel.text_input if t.label == "Asunto"][0].set_value("Te extrañamos")
+    [t for t in panel.text_area if t.label.startswith("Mensaje")][0].set_value("Hola {nombre}, hace tiempo que no te vemos.")
+    panel = _button(panel, "Enviar campaña").click().run()
+    assert any("confirmación" in e.value for e in panel.error) and sent == []
+    [c for c in panel.checkbox if c.label.startswith("Confirmo el envío")][0].check()
+    panel = _button(panel, "Enviar campaña").click().run()
+    # Sin SMTP configurado (ni contactos con consentimiento) la campaña se bloquea con un motivo claro
+    assert any("correo no está configurado" in e.value for e in panel.error) and sent == []

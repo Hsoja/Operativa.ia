@@ -26,6 +26,7 @@ export interface BookingRequest {
   name: string;
   email: string;
   consent: boolean;
+  marketing_consent: boolean;
 }
 
 export type BookingResult =

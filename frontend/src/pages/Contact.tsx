@@ -13,7 +13,7 @@ const FAILURES: Record<Exclude<SubmitResult, "sent">, string> = {
   error: "We couldn't send your message right now. Please try again later, or chat with Sofía.",
 };
 
-const EMPTY: LeadInput = { name: "", email: "", business: "", topic: TOPICS[0], message: "", consent: false };
+const EMPTY: LeadInput = { name: "", email: "", business: "", topic: TOPICS[0], message: "", consent: false, marketing: false };
 
 function Field({ label, id, error, children }: { label: string; id: string; error?: string; children: React.ReactNode }) {
   return (
@@ -128,6 +128,10 @@ export function Contact() {
                         </a>{" "}
                         and agree to my details being stored to answer this request.
                       </span>
+                    </label>
+                    <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-mute">
+                      <input id="marketing" type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[#ff5a1f]" checked={form.marketing === true} onChange={(e) => update("marketing", e.target.checked)} />
+                      <span>Optional: send me occasional news and offers from Operativa.ia by email. I can unsubscribe at any time.</span>
                     </label>
                     {errors.consent && (
                       <p id="consent-error" role="alert" className="mt-1.5 text-sm text-[#ff8a70]">

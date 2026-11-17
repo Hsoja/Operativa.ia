@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 
-export type Route = "home" | "services" | "about" | "reviews" | "contact" | "terms" | "privacy" | "book" | "notfound";
+export type Route = "home" | "services" | "about" | "reviews" | "contact" | "terms" | "privacy" | "book" | "unsubscribe" | "notfound";
 
 const BOOK_PATH = /^\/book\/([a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9]))$/;
+const UNSUBSCRIBE_PATH = /^\/unsubscribe\/([a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9]))\/([A-Za-z0-9_-]{30,64})$/;
 
 const ROUTES: Record<string, Route> = {
   "": "home",
@@ -20,11 +21,18 @@ const pathOf = (hash: string): string => hash.replace(/^#/, "").split("?")[0].re
 export const parseRoute = (hash: string): Route => {
   const path = pathOf(hash);
   if (BOOK_PATH.test(path)) return "book";
+  if (UNSUBSCRIBE_PATH.test(path)) return "unsubscribe";
   return ROUTES[path] ?? "notfound";
 };
 
 /** Slug del negocio en #/book/{slug}; null si no tiene el formato permitido. */
 export const bookingSlug = (hash: string): string | null => BOOK_PATH.exec(pathOf(hash))?.[1] ?? null;
+
+/** Slug y token de #/unsubscribe/{slug}/{token}; null si el formato no es válido. */
+export const unsubscribeTarget = (hash: string): { slug: string; token: string } | null => {
+  const match = UNSUBSCRIBE_PATH.exec(pathOf(hash));
+  return match ? { slug: match[1], token: match[2] } : null;
+};
 
 /** Parámetros después de "?" dentro del hash (#/book/sol?status=success&ref=...). */
 export const hashParams = (hash: string): URLSearchParams => new URLSearchParams(hash.split("?")[1] ?? "");

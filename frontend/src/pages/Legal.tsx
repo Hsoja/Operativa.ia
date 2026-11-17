@@ -69,14 +69,16 @@ export function Privacy() {
       <h2>3. Who processes it</h2>
       <p>Chat messages are processed by our AI provider (Groq) to generate Sofía's answers. We don't send your contact details to that provider. Deposits are paid on Stripe's secure checkout: your card details go directly to Stripe and never reach our servers; Stripe receives your email and the deposit amount. WhatsApp messages travel through Meta's WhatsApp Business platform. Server logs record technical events only, with identifiers replaced by pseudonyms.</p>
       <h2>4. Why we use it</h2>
-      <p>To answer your request and prepare a demo if you ask for one. We don't sell your information or use it for advertising.</p>
-      <h2>5. Cookies and tracking</h2>
+      <p>To answer your request, manage your appointment and prepare a demo if you ask for one. We don't sell your information.</p>
+      <h2>5. Reminders and offers by email</h2>
+      <p>We only send reminders or offers if you tick the optional box that asks for them; it's never pre-ticked. Each email identifies the business and includes a one-click unsubscribe link, and unsubscribing takes effect immediately. You'll receive at most one such email per month.</p>
+      <h2>6. Cookies and tracking</h2>
       <p>This site doesn't use advertising or analytics cookies. Fonts are served from the site itself, so no third-party font service sees your visit.</p>
-      <h2>6. Your choices</h2>
+      <h2>7. Your choices</h2>
       <p>You can ask us to access, correct or delete your personal data at any time through the contact page. Depending on where you live, privacy laws such as Canada's PIPEDA may give you additional rights.</p>
-      <h2>7. Children</h2>
+      <h2>8. Children</h2>
       <p>This site is intended for business owners and teams. It isn't directed at children.</p>
-      <h2>8. Contact</h2>
+      <h2>9. Contact</h2>
       <p>
         For privacy questions, use the <a href="#/contact" className="text-cream underline underline-offset-3">contact page</a>.
       </p>

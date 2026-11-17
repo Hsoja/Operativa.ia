@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatMoney, isStripeCheckout, submitBooking } from "./booking";
-import { bookingSlug, hashParams, parseRoute } from "./router";
+import { bookingSlug, hashParams, parseRoute, unsubscribeTarget } from "./router";
 
 const fetchMock = vi.fn();
 const respond = (status: number, body: unknown = {}) =>
@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const request = { service_id: 1, start: "2026-11-20T09:00", name: "Ana", email: "ana@sol.com", consent: true };
+const request = { service_id: 1, start: "2026-11-20T09:00", name: "Ana", email: "ana@sol.com", consent: true, marketing_consent: false };
 
 describe("rutas de reserva", () => {
   it.each([
@@ -85,4 +85,14 @@ describe("errores de reserva", () => {
 
 it("formatea el depósito", () => {
   expect(formatMoney(2500, "cad")).toContain("25.00");
+});
+
+describe("baja de correos", () => {
+  const token = "t".repeat(43);
+  it("reconoce la ruta y valida el token", () => {
+    expect(parseRoute(`#/unsubscribe/sol/${token}`)).toBe("unsubscribe");
+    expect(unsubscribeTarget(`#/unsubscribe/sol/${token}`)).toEqual({ slug: "sol", token });
+    expect(unsubscribeTarget("#/unsubscribe/sol/corto")).toBeNull();
+    expect(unsubscribeTarget(`#/unsubscribe/../${token}`)).toBeNull();
+  });
 });

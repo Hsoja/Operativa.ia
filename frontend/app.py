@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.logs import configure_logging, hash_identifier, security_event
 from pydantic import ValidationError
 
-from app.services import agent, auth, booking, conversations, coverage, leads, metrics, tenants
+from app.services import agent, auth, booking, conversations, coverage, leads, metrics, reactivation, tenants
 from app.services.calendar_service import (
     CalendarDisabledError,
     create_appointment,
@@ -99,8 +99,8 @@ def main() -> None:
     col4.metric("Mensajes de clientes (7 días)", summary["messages_week"])
 
     st.divider()
-    tab_agenda, tab_setup, tab_leads, tab_conversations, tab_coverage, tab_sofia = st.tabs(
-        ["📅 Agenda", "⚙️ Servicios y horario", "📥 Leads", "💬 Conversaciones", "🗺️ Cobertura", "🤖 Probar a Sofía"]
+    tab_agenda, tab_setup, tab_leads, tab_conversations, tab_coverage, tab_reactivation, tab_sofia = st.tabs(
+        ["📅 Agenda", "⚙️ Servicios y horario", "📥 Leads", "💬 Conversaciones", "🗺️ Cobertura", "📣 Reactivación", "🤖 Probar a Sofía"]
     )
 
     # --- Agenda -------------------------------------------------------------------------------------
@@ -338,6 +338,47 @@ def main() -> None:
                 st.info(coverage.describe(coverage.check(tenant["id"], query)))
             except ValidationError:
                 st.error("Datos de consulta no válidos.")
+
+    # --- Reactivación (CASL) ------------------------------------------------------------------------
+    with tab_reactivation:
+        stats = reactivation.contact_stats(tenant["id"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Contactos", stats["total"])
+        c2.metric("Con consentimiento", stats["opted_in"])
+        c3.metric("Dados de baja", stats["unsubscribed"])
+        st.caption(
+            "Solo reciben correos quienes marcaron la casilla de recordatorios y ofertas (consentimiento explícito, CASL). "
+            "Cada correo incluye el nombre y la dirección del negocio y un enlace de baja."
+        )
+        if user["role"] in ("owner", "admin"):
+            days = st.number_input("Clientes sin actividad desde hace (días)", min_value=30, max_value=730, value=90, step=15, key="react_days")
+            st.text(f"Recibirían este correo: {reactivation.preview(tenant['id'], int(days))} contactos")
+            subject = st.text_input("Asunto", max_chars=120, key="react_subject")
+            body = st.text_area("Mensaje (usa {nombre} para personalizar)", max_chars=2000, key="react_body")
+            sure = st.checkbox("Confirmo el envío a los contactos con consentimiento", key="react_confirm")
+            if st.button("Enviar campaña"):
+                if not sure:
+                    st.error("Marca la confirmación antes de enviar.")
+                else:
+                    try:
+                        campaign = reactivation.CampaignIn(inactive_days=int(days), subject=subject, body=body, confirm=True)
+                        campaign_id, sends = reactivation.create_campaign(tenant, campaign)
+                        result = reactivation.deliver(tenant, campaign_id, campaign, sends)
+                        st.success(f"Campaña enviada: {result['sent']} enviados, {result['failed']} con error.")
+                    except ValidationError:
+                        st.error("Revisa el asunto (una línea, 3 a 120 caracteres) y el mensaje (20 a 2000).")
+                    except reactivation.CampaignBlocked as exc:
+                        st.error(str(exc))
+        history = reactivation.list_campaigns(tenant["id"])
+        if history:
+            st.subheader("Historial")
+            st.dataframe(
+                [
+                    {"Fecha": _fmt(c["created_at"]), "Asunto": c["subject"], "Destinatarios": c["recipients"], "Enviados": c["sent"], "Errores": c["failed"]}
+                    for c in history
+                ],
+                hide_index=True,
+            )
 
     # --- Probar a Sofía --------------------------------------------------------------------------------
     with tab_sofia:

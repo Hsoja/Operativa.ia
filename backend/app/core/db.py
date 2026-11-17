@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from app.core.config import get_settings
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tenants (
@@ -152,6 +152,38 @@ CREATE TABLE IF NOT EXISTS appointments (
     CHECK (starts_at < ends_at)
 );
 CREATE INDEX IF NOT EXISTS appointments_tenant ON appointments (tenant_id, starts_at);
+CREATE TABLE IF NOT EXISTS contacts (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    marketing_consent INTEGER NOT NULL DEFAULT 0 CHECK (marketing_consent IN (0, 1)),
+    consent_at INTEGER,
+    consent_source TEXT CHECK (consent_source IN ('contact-form', 'sofia', 'booking')),
+    unsubscribed_at INTEGER,
+    last_activity_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (tenant_id, email)
+);
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    inactive_days INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    sent INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS campaign_sends (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    unsubscribe_hash TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+    sent_at INTEGER
+);
 """
 
 LEGACY_TABLE_QUERY = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'admin_users'"
@@ -171,11 +203,11 @@ def _initialize(connection: sqlite3.Connection) -> None:
             "La base de datos es de la versión sin multi-tenant. Respáldala, bórrala y crea "
             "los negocios y usuarios de nuevo con `python -m app.cli` (ver README)."
         )
-    if version not in (0, 2, 3, 4):
+    if version not in (0, 2, 3, 4, 5):
         raise SchemaVersionError("Versión de base de datos desconocida.")
     # De v2 en adelante solo se agregan tablas (CREATE ... IF NOT EXISTS): el mismo script sirve de migración
     connection.executescript(SCHEMA)
-    connection.execute("PRAGMA user_version = 5")
+    connection.execute("PRAGMA user_version = 6")
 
 
 @contextmanager

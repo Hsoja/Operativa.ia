@@ -96,6 +96,7 @@ function BookPage({ hash }: { hash: string }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
+  const [marketing, setMarketing] = useState(false);
   const [trap, setTrap] = useState("");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
@@ -153,7 +154,7 @@ function BookPage({ hash }: { hash: string }) {
     if (!consent) return setMessage("Please accept the Privacy Policy to continue.");
     setSending(true);
     setMessage("");
-    const result = await submitBooking(slug, { service_id: service.id, start: slot, name: cleanText(name), email: cleanText(email), consent: true });
+    const result = await submitBooking(slug, { service_id: service.id, start: slot, name: cleanText(name), email: cleanText(email), consent: true, marketing_consent: marketing });
     if (result.kind === "redirect") {
       window.location.assign(result.url);
       return;
@@ -256,6 +257,10 @@ function BookPage({ hash }: { hash: string }) {
                 <span>
                   I've read the <a href="#/privacy" className="font-medium text-cream underline underline-offset-3">Privacy Policy</a> and agree to my name and email being stored to manage this appointment.
                 </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-mute">
+                <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[#ff5a1f]" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+                <span>Optional: send me reminders and offers from this business by email. I can unsubscribe at any time.</span>
               </label>
               {message && (
                 <p role="alert" className="rounded-xl border border-[#ff8a70]/40 bg-[#ff8a70]/10 px-4 py-3 text-sm">

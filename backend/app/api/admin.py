@@ -12,7 +12,7 @@ import sqlite3
 import time
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from pydantic import StringConstraints
 
 from app.api.deps import require_csrf, require_roles, require_roles_csrf, require_user, require_user_csrf
@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.core.logs import hash_identifier, security_event
 from app.core.ratelimit import admin_rate, client_ip, ip_session_key, limiter, login_rate
 from app.core.validation import StrictModel
-from app.services import agent, auth, booking, conversations, coverage, leads, tenants
+from app.services import agent, auth, booking, conversations, coverage, leads, reactivation, tenants
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Panel"])
 
@@ -254,3 +254,39 @@ def cancel_appointment(request: Request, appointment_id: int, session: dict = De
         raise HTTPException(status_code=404, detail="No encontrado.")
     security_event("appointment_cancelled", tenant=session["tenant_slug"])
     return {"status": "cancelled"}
+
+
+# --- Reactivación (CASL) -----------------------------------------------------------------------------
+
+@router.get("/campaigns")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def read_campaigns(request: Request, session: dict = Depends(require_roles(*ALL_ROLES))):
+    return {
+        "contacts": reactivation.contact_stats(session["tenant_id"]),
+        "campaigns": reactivation.list_campaigns(session["tenant_id"]),
+    }
+
+
+@router.post("/campaigns/preview")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def preview_campaign(request: Request, payload: reactivation.PreviewIn, session: dict = Depends(require_roles_csrf(*MANAGERS))):
+    """Cuántos contactos recibirían la campaña (solo con consentimiento explícito y sin baja)."""
+    return {"eligible": reactivation.preview(session["tenant_id"], payload.inactive_days)}
+
+
+@router.post("/campaigns", status_code=202)
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def send_campaign(
+    request: Request,
+    payload: reactivation.CampaignIn,
+    background: BackgroundTasks,
+    session: dict = Depends(require_roles_csrf(*MANAGERS)),
+):
+    tenant = tenants.get(session["tenant_id"])
+    try:
+        campaign_id, sends = reactivation.create_campaign(tenant, payload)
+    except reactivation.CampaignBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    security_event("campaign_created", tenant=session["tenant_slug"], recipients=len(sends), user=hash_identifier(session["username"].lower()))
+    background.add_task(reactivation.deliver, tenant, campaign_id, payload, sends)
+    return {"campaign_id": campaign_id, "recipients": len(sends)}

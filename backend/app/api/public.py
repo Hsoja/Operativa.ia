@@ -16,7 +16,7 @@ from app.core.config import get_settings
 from app.core.logs import security_event
 from app.core.ratelimit import browse_rate, chat_rate, client_ip, contact_rate, limiter
 from app.core.validation import CleanStr, StrictModel
-from app.services import agent, booking, coverage, leads, payments, tenants
+from app.services import agent, booking, coverage, leads, payments, reactivation, tenants
 
 router = APIRouter(prefix="/api/v1/public/{slug}", tags=["Público"])
 
@@ -94,6 +94,7 @@ def create_booking(request: Request, payload: booking.BookingIn, tenant: dict = 
         raise HTTPException(status_code=409, detail="Ese horario ya no está disponible.") from None
     except booking.BookingError:
         raise HTTPException(status_code=422, detail="Datos inválidos.") from None
+    reactivation.record_contact(tenant["id"], payload.email, payload.name, payload.marketing_consent, "booking")
     security_event("booking_created", tenant=tenant["slug"], status=created["status"])
     if created["status"] == "confirmed":
         return {"status": "confirmed", "ref": created["ref"]}
@@ -121,5 +122,16 @@ def read_booking(request: Request, ref: Annotated[str, StringConstraints(pattern
 def submit_contact(request: Request, payload: leads.LeadIn, tenant: dict = Depends(public_tenant)):
     """Solicitud de contacto o demo. Requiere consentimiento; el contenido nunca va al log."""
     leads.create_lead(tenant["id"], payload)
+    reactivation.record_contact(tenant["id"], payload.email, payload.name, payload.marketing_consent, payload.source)
     security_event("lead_received", tenant=tenant["slug"], source=payload.source)
     return JSONResponse(status_code=201, content={"status": "received"})
+
+
+@router.post("/unsubscribe/{token}")
+@limiter.limit(browse_rate)
+def unsubscribe(request: Request, token: Annotated[str, StringConstraints(pattern=reactivation.TOKEN_PATTERN)], tenant: dict = Depends(public_tenant)):
+    """Baja de un clic (CASL / RFC 8058). Solo POST: un escáner de enlaces que haga GET no da de baja a nadie."""
+    if not reactivation.unsubscribe(tenant["id"], token):
+        raise HTTPException(status_code=404, detail="No encontrado.")
+    security_event("contact_unsubscribed", tenant=tenant["slug"])
+    return {"status": "unsubscribed"}

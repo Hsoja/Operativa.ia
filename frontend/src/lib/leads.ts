@@ -16,6 +16,8 @@ export interface LeadInput {
   topic: string;
   message: string;
   consent: boolean;
+  /** CASL: casilla aparte y desmarcada por defecto. */
+  marketing?: boolean;
 }
 
 export type LeadSource = "contact-form" | "sofia";
@@ -58,6 +60,7 @@ export async function submitLead(input: LeadInput, source: LeadSource): Promise<
     message: cleanText(input.message),
     source,
     consent: true,
+    marketing_consent: input.marketing === true,
   });
   if (result.ok) return "sent";
   if (result.reason === "invalid") return "invalid";

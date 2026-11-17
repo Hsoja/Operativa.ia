@@ -37,6 +37,8 @@ class LeadIn(StrictModel):
     message: CleanStr(min_length=10, max_length=2000)
     source: Literal["contact-form", "sofia"] = "contact-form"
     consent: Annotated[bool, AfterValidator(_must_consent)]
+    # CASL: casilla aparte y desmarcada por defecto para recordatorios y ofertas
+    marketing_consent: bool = False
     # Trampa para bots: un campo oculto que una persona nunca rellena
     website: Annotated[str, Field(max_length=0)] = ""
 

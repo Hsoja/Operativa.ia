@@ -89,6 +89,7 @@ class BookingIn(StrictModel):
     name: CleanStr(min_length=2, max_length=80)
     email: Annotated[CleanStr(min_length=6, max_length=254), AfterValidator(_valid_email)]
     consent: Annotated[bool, AfterValidator(_must_consent)]
+    marketing_consent: bool = False  # CASL: casilla aparte, desmarcada por defecto
     website: Annotated[str, Field(max_length=0)] = ""  # trampa para bots
 
 

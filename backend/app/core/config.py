@@ -20,6 +20,7 @@ load_dotenv(dotenv_path=ROOT_DIR / ".env")
 VALID_ENVS = {"development", "staging", "production"}
 DEFAULT_ORIGINS = "http://localhost:8501,http://127.0.0.1:8501"
 WHATSAPP_VARS = ("WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_ACCESS_TOKEN")
+SMTP_VARS = ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM")
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,12 @@ class Settings:
     booking_hold_minutes: int
     booking_lead_minutes: int
     booking_days_ahead: int
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_from: str
+    campaign_max_recipients: int
 
     @property
     def is_production(self) -> bool:
@@ -71,6 +78,10 @@ class Settings:
     @property
     def stripe_enabled(self) -> bool:
         return bool(self.stripe_secret_key and self.stripe_webhook_secret)
+
+    @property
+    def smtp_enabled(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
     @property
     def session_cookie(self) -> str:
@@ -133,6 +144,16 @@ def get_settings() -> Settings:
             raise ValueError("Con Stripe activo, PUBLIC_SITE_URL es obligatorio (URL de retorno del pago).")
     if site_url:
         _parse_origins(site_url, env)  # mismas reglas: sin comodines, https en producción
+    smtp = {name: os.getenv(name, "").strip() for name in SMTP_VARS}
+    if any(smtp.values()):
+        if not (smtp["SMTP_HOST"] and smtp["SMTP_FROM"]):
+            raise ValueError("El correo requiere al menos SMTP_HOST y SMTP_FROM.")
+        if bool(smtp["SMTP_USERNAME"]) != bool(smtp["SMTP_PASSWORD"]):
+            raise ValueError("SMTP_USERNAME y SMTP_PASSWORD van juntos.")
+        if not re.fullmatch(r"[^@\s<>\r\n]+@[^@\s<>\r\n]+\.[A-Za-z]{2,}", smtp["SMTP_FROM"]):
+            raise ValueError("SMTP_FROM debe ser una dirección de correo simple.")
+        if not site_url:
+            raise ValueError("Con correo activo, PUBLIC_SITE_URL es obligatorio (enlace de baja).")
     graph_version = os.getenv("WHATSAPP_GRAPH_VERSION", "v23.0").strip()
     if not re.fullmatch(r"v\d{1,3}\.\d{1,2}", graph_version):
         raise ValueError("WHATSAPP_GRAPH_VERSION debe tener la forma v23.0.")
@@ -175,4 +196,10 @@ def get_settings() -> Settings:
         booking_hold_minutes=_positive_int("BOOKING_HOLD_MINUTES", "35"),
         booking_lead_minutes=_positive_int("BOOKING_LEAD_MINUTES", "60"),
         booking_days_ahead=_positive_int("BOOKING_DAYS_AHEAD", "60"),
+        smtp_host=smtp["SMTP_HOST"],
+        smtp_port=_positive_int("SMTP_PORT", "587"),
+        smtp_username=smtp["SMTP_USERNAME"],
+        smtp_password=smtp["SMTP_PASSWORD"],
+        smtp_from=smtp["SMTP_FROM"],
+        campaign_max_recipients=_positive_int("CAMPAIGN_MAX_RECIPIENTS", "500"),
     )

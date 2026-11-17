@@ -13,6 +13,7 @@ import { Privacy, Terms } from "./pages/Legal";
 import { NotFound } from "./pages/NotFound";
 import { Reviews } from "./pages/Reviews";
 import { Services } from "./pages/Services";
+import { Unsubscribe } from "./pages/Unsubscribe";
 
 const PAGES: Record<Route, { title: string; element: JSX.Element }> = {
   home: { title: "Operativa.ia — AI that fits your business", element: <Home /> },
@@ -23,6 +24,7 @@ const PAGES: Record<Route, { title: string; element: JSX.Element }> = {
   terms: { title: "Terms & Conditions — Operativa.ia", element: <Terms /> },
   privacy: { title: "Privacy Policy — Operativa.ia", element: <Privacy /> },
   book: { title: "Book an appointment — Operativa.ia", element: <Book /> },
+  unsubscribe: { title: "Unsubscribe — Operativa.ia", element: <Unsubscribe /> },
   notfound: { title: "Page not found — Operativa.ia", element: <NotFound /> },
 };
 
