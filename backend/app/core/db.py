@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from app.core.config import get_settings
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tenants (
@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     location TEXT NOT NULL DEFAULT '',
     timezone TEXT NOT NULL DEFAULT 'America/Toronto',
     template TEXT NOT NULL DEFAULT 'general',
+    notify_email TEXT NOT NULL DEFAULT '',
     active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
     created_at INTEGER NOT NULL
 );
@@ -203,11 +204,15 @@ def _initialize(connection: sqlite3.Connection) -> None:
             "La base de datos es de la versión sin multi-tenant. Respáldala, bórrala y crea "
             "los negocios y usuarios de nuevo con `python -m app.cli` (ver README)."
         )
-    if version not in (0, 2, 3, 4, 5):
+    if version not in (0, 2, 3, 4, 5, 6):
         raise SchemaVersionError("Versión de base de datos desconocida.")
-    # De v2 en adelante solo se agregan tablas (CREATE ... IF NOT EXISTS): el mismo script sirve de migración
+    # De v2 en adelante solo se agregan tablas y columnas: el mismo script sirve de migración
     connection.executescript(SCHEMA)
-    connection.execute("PRAGMA user_version = 6")
+    if version != 0:
+        existing = {r["name"] for r in connection.execute("PRAGMA table_info(tenants)")}
+        if "notify_email" not in existing:
+            connection.execute("ALTER TABLE tenants ADD COLUMN notify_email TEXT NOT NULL DEFAULT ''")
+    connection.execute("PRAGMA user_version = 7")
 
 
 @contextmanager

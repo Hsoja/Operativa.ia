@@ -37,6 +37,7 @@ def _ensure_demo_tenant(settings) -> None:
                 ),
                 hours="By appointment, Monday to Friday.",
                 location="Waterloo, ON, Canada",
+                notify_email=settings.seed_demo_notify_email,
             ),
         )
         security_event("demo_tenant_seeded", tenant=slug)
