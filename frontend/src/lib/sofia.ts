@@ -278,6 +278,8 @@ const BOOKING_PROMPTS: Record<BookingStep, Text> = {
 };
 
 const NO_WORDS = ["no", "nope", "no thanks", "no gracias", "mejor no"];
+/** El consentimiento debe ser una respuesta afirmativa completa: "ok, espera" no cuenta. */
+const CONSENT_ANSWERS = new Set(["yes", "y", "yes please", "i agree", "agree", "si", "si acepto", "acepto", "de acuerdo", "claro que si", "ok", "okay"]);
 
 function continueBooking(raw: string, state: ChatState): Reply {
   const booking = state.booking!;
@@ -320,7 +322,7 @@ function continueBooking(raw: string, state: ChatState): Reply {
     case "consent": {
       const answer = normalize(text);
       const finished = { ...state, booking: null, lastIntent: null };
-      if (hasAny(answer, YES_WORDS) && !hasAny(answer, NO_WORDS)) {
+      if (CONSENT_ANSWERS.has(answer)) {
         return {
           text: "",
           suggestions: pick(lang, [S.how, S.tools]),
@@ -328,7 +330,7 @@ function continueBooking(raw: string, state: ChatState): Reply {
           lead: { name: booking.name, business: booking.business, email: booking.email, topic: "Book a demo", message: booking.need, consent: true },
         };
       }
-      if (hasAny(answer, NO_WORDS)) {
+      if (NO_WORDS.includes(answer) || answer.startsWith("no ")) {
         return {
           text: lang === "es" ? "Entendido, no guardé nada. ¿Te ayudo con algo más?" : "Understood, I didn't save anything. Can I help with anything else?",
           suggestions: pick(lang, [S.services, S.how]),

@@ -96,6 +96,16 @@ describe("solicitud de demo", () => {
     expect(reply.lead).toMatchObject({ name: "Ana Pérez", business: "Clínica Sol", email: "ana@sol.com", consent: true });
   });
 
+  it.each(["ok wait", "yes but later", "maybe", "sí pero", "what data?"])("una respuesta ambigua no es consentimiento: %s", (answer) => {
+    const reply = say(...steps, answer);
+    expect(reply.lead).toBeUndefined();
+    expect(reply.state.booking?.step).toBe("consent");
+  });
+
+  it.each(["yes", "Sí", "acepto", "I agree"])("acepta un sí claro: %s", (answer) => {
+    expect(say(...steps, answer).lead).toBeDefined();
+  });
+
   it("con un no no guarda nada", () => {
     const reply = say(...steps, "no");
     expect(reply.lead).toBeUndefined();
