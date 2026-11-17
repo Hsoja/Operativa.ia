@@ -6,7 +6,10 @@ from app.services import auth, tenants
 PASSWORD = "-".join(["contrasena", "de", "prueba", "1"])
 ORIGIN = {"Origin": "http://localhost:8501"}
 PROD = {"ENV": "production", "ALLOWED_ORIGINS": "https://app.example.com", "IP_HASH_SALT": "s" * 32}
-TABLES = ("messages", "conversations", "leads", "llm_usage", "sessions", "login_attempts", "users", "tenants")
+TABLES = (
+    "messages", "conversations", "leads", "llm_usage", "sessions", "login_attempts",
+    "tenant_channels", "webhook_events", "users", "tenants",
+)
 
 
 def reset_db() -> None:

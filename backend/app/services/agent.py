@@ -42,12 +42,19 @@ def build_system_prompt(tenant: dict) -> str:
     )
 
 
-def process_message(tenant: dict, message: str, conversation_token: str | None, client_ip: str = "unknown") -> dict:
+def process_message(
+    tenant: dict,
+    message: str,
+    conversation_token: str | None,
+    client_ip: str = "unknown",
+    channel: str = "web",
+    server_token: bool = False,
+) -> dict:
     """Guarda el mensaje, consulta a Groq con el historial del servidor y devuelve la respuesta filtrada."""
     settings = get_settings()
     tenant_id = tenant["id"]
     client_hash = hash_identifier(client_ip)
-    conversation_id, token = conversations.open_conversation(tenant_id, conversation_token)
+    conversation_id, token = conversations.open_conversation(tenant_id, conversation_token, channel, server_token)
 
     def result(status: str, reply: str) -> dict:
         return {"status": status, "conversation_id": token, "user_message": message, "agent_response": reply}

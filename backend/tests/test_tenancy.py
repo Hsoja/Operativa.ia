@@ -50,6 +50,8 @@ EXPECTED_ROUTES = {
     ("POST", "/api/v1/admin/leads/{lead_id}/delete"),
     ("GET", "/api/v1/admin/conversations"),
     ("GET", "/api/v1/admin/conversations/{conversation_id}"),
+    ("GET", "/api/v1/webhooks/whatsapp"),
+    ("POST", "/api/v1/webhooks/whatsapp"),
 }
 
 
@@ -430,3 +432,9 @@ def test_numeric_settings_must_be_positive(make_client, name, value):
 
 def test_password_constant_is_test_only():
     assert len(PASSWORD) >= auth.MIN_PASSWORD_LENGTH
+
+
+def test_browser_chosen_conversation_token_is_never_adopted(client):
+    chosen = "a" * 24
+    r = client.post("/api/v1/public/sol/chat", json={"message": "Hola", "conversation_id": chosen})
+    assert r.json()["conversation_id"] != chosen

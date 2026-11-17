@@ -5,6 +5,7 @@ Uso:
     python -m app.cli create-user --tenant clinica-sol --username ana --role owner
     python -m app.cli reset-password --username ana
     python -m app.cli set-active --tenant clinica-sol --active false
+    python -m app.cli link-whatsapp --tenant clinica-sol --phone-number-id 123456789012345
     python -m app.cli purge
 
 La contraseña siempre se pide por consola: nunca como argumento, para que no quede en el historial.
@@ -20,7 +21,7 @@ import sys
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.services import auth, conversations, tenants
+from app.services import auth, channels, conversations, tenants
 
 USERNAME = re.compile(r"[A-Za-z0-9_.-]{3,64}")
 
@@ -54,6 +55,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--tenant", required=True)
     p.add_argument("--active", choices=["true", "false"], required=True)
 
+    p = sub.add_parser("link-whatsapp", help="Asocia el phone_number_id de WhatsApp Business a un negocio.")
+    p.add_argument("--tenant", required=True)
+    p.add_argument("--phone-number-id", required=True)
+
     sub.add_parser("purge", help="Borra sesiones vencidas, intentos de login viejos y conversaciones fuera de retención.")
     return parser
 
@@ -83,13 +88,20 @@ def main(argv: list[str] | None = None) -> int:
             if not tenants.set_active(args.tenant, args.active == "true"):
                 print("No existe ese negocio.", file=sys.stderr)
                 return 1
+        elif args.command == "link-whatsapp":
+            tenant = tenants.get_by_slug(args.tenant)
+            if tenant is None:
+                print("No existe ese negocio.", file=sys.stderr)
+                return 1
+            channels.link_whatsapp(tenant["id"], args.phone_number_id)
         elif args.command == "purge":
             removed = (
                 auth.purge_expired_sessions(),
                 auth.purge_login_attempts(),
                 conversations.purge_older_than(get_settings().conversation_retention_days),
+                channels.purge_events(),
             )
-            print("Sesiones: {}, intentos de login: {}, conversaciones: {}".format(*removed))
+            print("Sesiones: {}, intentos de login: {}, conversaciones: {}, eventos de webhook: {}".format(*removed))
     except ValidationError as exc:
         fields = ", ".join(".".join(str(p) for p in e["loc"]) for e in exc.errors())
         print(f"Datos inválidos: {fields}", file=sys.stderr)

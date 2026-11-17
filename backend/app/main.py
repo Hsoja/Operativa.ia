@@ -7,6 +7,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.admin import router as admin_router
 from app.api.public import router as public_router
+from app.api.webhooks import router as webhooks_router
 from app.core.config import get_settings
 from app.core.db import get_connection
 from app.core.logs import configure_logging, security_event
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     # Rutas públicas por negocio (chat y contacto) y rutas privadas del panel
     app.include_router(public_router)
     app.include_router(admin_router)
+    app.include_router(webhooks_router)
 
     @app.get("/")
     def read_root():

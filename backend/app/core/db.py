@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from app.core.config import get_settings
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tenants (
@@ -85,6 +85,20 @@ CREATE TABLE IF NOT EXISTS leads (
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS leads_tenant ON leads (tenant_id, created_at);
+CREATE TABLE IF NOT EXISTS tenant_channels (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    channel TEXT NOT NULL CHECK (channel IN ('whatsapp')),
+    external_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (channel, external_id)
+);
+CREATE TABLE IF NOT EXISTS webhook_events (
+    provider TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    received_at INTEGER NOT NULL,
+    PRIMARY KEY (provider, event_id)
+);
 """
 
 LEGACY_TABLE_QUERY = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'admin_users'"
@@ -104,10 +118,11 @@ def _initialize(connection: sqlite3.Connection) -> None:
             "La base de datos es de la versión sin multi-tenant. Respáldala, bórrala y crea "
             "los negocios y usuarios de nuevo con `python -m app.cli` (ver README)."
         )
-    if version != 0:
+    if version not in (0, 2):
         raise SchemaVersionError("Versión de base de datos desconocida.")
+    # v2 -> v3 solo agrega tablas (CREATE ... IF NOT EXISTS), así que el mismo script sirve de migración
     connection.executescript(SCHEMA)
-    connection.execute("PRAGMA user_version = 2")
+    connection.execute("PRAGMA user_version = 3")
 
 
 @contextmanager

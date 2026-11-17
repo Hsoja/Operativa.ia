@@ -13,8 +13,15 @@ from app.services.auth import hash_token
 HISTORY_MESSAGES = 10
 
 
-def open_conversation(tenant_id: int, token: str | None, channel: str = "web") -> tuple[int, str]:
-    """Devuelve (id, token). Un token desconocido o de otro negocio abre una conversación nueva."""
+def open_conversation(
+    tenant_id: int, token: str | None, channel: str = "web", server_token: bool = False
+) -> tuple[int, str]:
+    """Devuelve (id, token). Un token desconocido o de otro negocio abre una conversación nueva.
+
+    `server_token=True` solo para identificadores que calcula el servidor (WhatsApp: HMAC del número):
+    entonces la conversación nueva se crea con ese mismo token. Un token enviado por un navegador
+    nunca se adopta: se reemplaza por uno aleatorio.
+    """
     now = int(time.time())
     with get_connection() as db:
         if token:
@@ -24,7 +31,8 @@ def open_conversation(tenant_id: int, token: str | None, channel: str = "web") -
             if row:
                 db.execute("UPDATE conversations SET last_at = ? WHERE id = ?", (now, row["id"]))
                 return int(row["id"]), token
-        token = secrets.token_urlsafe(24)
+        if not (server_token and token):
+            token = secrets.token_urlsafe(24)
         cursor = db.execute(
             "INSERT INTO conversations (tenant_id, token_hash, channel, created_at, last_at) VALUES (?, ?, ?, ?, ?)",
             (tenant_id, hash_token(token), channel, now, now),

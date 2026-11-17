@@ -5,6 +5,7 @@ Lee las variables de entorno una sola vez y rechaza valores inseguros al arranca
 
 import ipaddress
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +19,7 @@ load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
 VALID_ENVS = {"development", "staging", "production"}
 DEFAULT_ORIGINS = "http://localhost:8501,http://127.0.0.1:8501"
+WHATSAPP_VARS = ("WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_ACCESS_TOKEN")
 
 
 @dataclass(frozen=True)
@@ -45,10 +47,19 @@ class Settings:
     calendar_enabled: bool
     groq_api_key: str
     ip_hash_salt: str
+    whatsapp_app_secret: str
+    whatsapp_verify_token: str
+    whatsapp_access_token: str
+    whatsapp_graph_version: str
+    whatsapp_max_age_seconds: int
 
     @property
     def is_production(self) -> bool:
         return self.env == "production"
+
+    @property
+    def whatsapp_enabled(self) -> bool:
+        return bool(self.whatsapp_app_secret and self.whatsapp_verify_token and self.whatsapp_access_token)
 
     @property
     def session_cookie(self) -> str:
@@ -89,6 +100,15 @@ def get_settings() -> Settings:
         raise ValueError(f"ENV debe ser uno de {sorted(VALID_ENVS)}.")
 
     ip_hash_salt = os.getenv("IP_HASH_SALT", "")
+    whatsapp = {name: os.getenv(name, "").strip() for name in WHATSAPP_VARS}
+    # Fail-closed: una integración a medio configurar no arranca (ni en desarrollo)
+    if any(whatsapp.values()) and not all(whatsapp.values()):
+        raise ValueError(f"WhatsApp requiere las tres variables: {', '.join(WHATSAPP_VARS)}.")
+    if whatsapp["WHATSAPP_APP_SECRET"] and len(whatsapp["WHATSAPP_VERIFY_TOKEN"]) < 24:
+        raise ValueError("WHATSAPP_VERIFY_TOKEN debe tener 24 caracteres o más.")
+    graph_version = os.getenv("WHATSAPP_GRAPH_VERSION", "v23.0").strip()
+    if not re.fullmatch(r"v\d{1,3}\.\d{1,2}", graph_version):
+        raise ValueError("WHATSAPP_GRAPH_VERSION debe tener la forma v23.0.")
     if env == "production" and len(ip_hash_salt) < 32:
         raise ValueError("En producción IP_HASH_SALT es obligatorio (32 caracteres o más).")
 
@@ -116,4 +136,9 @@ def get_settings() -> Settings:
         calendar_enabled=os.getenv("CALENDAR_ENABLED", "false").strip().lower() == "true",
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
         ip_hash_salt=ip_hash_salt,
+        whatsapp_app_secret=whatsapp["WHATSAPP_APP_SECRET"],
+        whatsapp_verify_token=whatsapp["WHATSAPP_VERIFY_TOKEN"],
+        whatsapp_access_token=whatsapp["WHATSAPP_ACCESS_TOKEN"],
+        whatsapp_graph_version=graph_version,
+        whatsapp_max_age_seconds=_positive_int("WHATSAPP_MAX_AGE_SECONDS", "3600"),
     )

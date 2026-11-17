@@ -14,6 +14,7 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 | Datos de cada PYME (leads, conversaciones, equipo) | Que un negocio vea o cambie datos de otro (IDOR, `tenant_id` enviado por el cliente) | `tenant_id` en cada tabla y consulta, tomado solo de la sesión o del slug; prueba de aislamiento entre dos negocios |
 | Permisos dentro de un negocio | Escalada de privilegios (staff que actúa como owner) | `require_roles` en cada ruta, matriz de roles probada, owners solo por CLI |
 | Formulario y chat públicos | Spam, abuso de costo, datos personales sin consentimiento | Límites por IP, topes de tokens por negocio, trampa anti-bots, consentimiento obligatorio, retención de conversaciones |
+| Webhook de WhatsApp | Mensajes falsos, repetidos o viejos; respuesta desde otro negocio; SSRF por `phone_number_id` | Firma `X-Hub-Signature-256` en tiempo constante, idempotencia por id, antigüedad máxima, negocio por número registrado, ids solo numéricos, sin redirecciones, apagado sin llaves |
 | Historial del chat | Turnos de la asistente inventados por el cliente | El historial vive en el servidor; el navegador solo tiene un identificador aleatorio guardado como hash |
 
 **Límites de confianza:** navegador → proxy → API o panel → Groq y Google. Entre negocios también hay un límite: el slug público identifica al negocio, pero nunca da acceso a sus datos. Todo lo que envía el navegador, responde el modelo o devuelve un proveedor se trata como no confiable.
@@ -26,6 +27,7 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 - **Límites de peticiones:** `backend/app/core/ratelimit.py`. `X-Forwarded-For` solo se usa si la conexión viene de `TRUSTED_PROXIES`.
 - **Autenticación:** `backend/app/services/auth.py`, `backend/app/api/admin.py`, `backend/app/api/deps.py` y `backend/app/cli.py`.
 - **Multi-tenant y roles:** `backend/app/services/tenants.py`, `backend/app/api/deps.py` (`require_roles`, `public_tenant`). Matriz: staff ve; admin además edita el perfil y borra leads; owner además crea personal. Negocios y owners se crean solo por CLI.
+- **WhatsApp:** `backend/app/services/whatsapp.py`, `channels.py` y `backend/app/api/webhooks.py`. El número del cliente no se guarda: la conversación se identifica con un HMAC del número (clave: App Secret). Rotar el App Secret inicia conversaciones nuevas.
 - **Datos personales:** `backend/app/services/leads.py` y `conversations.py`. Retención con `python -m app.cli purge` (`CONVERSATION_RETENTION_DAYS`); se recomienda ejecutarlo a diario con cron.
 - **LLM:** `backend/app/services/llm_guard.py` y `backend/app/services/agent.py`.
 - **Calendar:** `backend/app/services/calendar_service.py`.
