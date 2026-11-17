@@ -187,7 +187,7 @@ export function ChatWidget({ open, setOpen, pending, clearPending }: { open: boo
                     <h2 className="font-semibold">Sofía</h2>
                     <p className="flex items-center gap-1.5 text-xs text-mute">
                       <span className="h-1.5 w-1.5 rounded-full bg-glow shadow-[0_0_8px_#ffb347]" />
-                      {thinking ? "Thinking…" : "Prototype assistant"}
+                      {thinking ? "Thinking…" : "AI assistant · can make mistakes"}
                     </p>
                   </div>
                   <button onClick={reset} aria-label="Start over" className="grid h-10 w-10 place-items-center rounded-full text-mute transition hover:bg-white/8 hover:text-cream">
@@ -223,7 +223,7 @@ export function ChatWidget({ open, setOpen, pending, clearPending }: { open: boo
                   </motion.div>
                 ))}
                 {thinking && (
-                  <div className="flex" aria-label="Sofía is typing">
+                  <div className="flex" role="status" aria-label="Sofía is typing">
                     <span className="flex gap-1.5 rounded-2xl rounded-bl-md border border-line bg-ink-3 px-4 py-3.5">
                       {[0, 1, 2].map((dot) => (
                         <motion.i
@@ -278,7 +278,7 @@ export function ChatWidget({ open, setOpen, pending, clearPending }: { open: boo
                     <ArrowUp size={19} strokeWidth={2.6} />
                   </button>
                 </div>
-                <p className="mt-2 text-center text-[0.7rem] text-faint">Virtual assistant. Please don't share passwords or sensitive data.</p>
+                <p className="mt-2 text-center text-[0.7rem] text-faint">AI assistant. Please don't share passwords, payment or health data.</p>
               </form>
             </motion.aside>
           </>

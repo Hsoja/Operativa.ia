@@ -1,10 +1,13 @@
 /**
- * Motor local de Sofía: entiende intenciones, recuerda el tema y guía la solicitud de demo.
- * No llama a ningún modelo. Al conectar la API, reemplaza respondLocally dentro de askSofia.
+ * Sofía en el sitio.
+ * - Las preguntas abiertas van a la API (POST /api/v1/public/{slug}/chat), que aplica los controles del LLM.
+ * - La solicitud de demo es un flujo guiado local que pide consentimiento explícito antes de enviar nada.
+ * - Si la API no responde, el motor local de intenciones contesta como respaldo.
  * Sofía nunca da precios: dependen del alcance y se confirman en una llamada.
  */
 
-import { cleanText, isValidEmail, saveLead } from "./leads";
+import { postJson } from "./api";
+import { cleanText, isValidEmail, submitLead, type LeadInput } from "./leads";
 
 export type Lang = "en" | "es";
 type Text = Record<Lang, string>;
@@ -17,21 +20,25 @@ interface Intent {
   suggestions: Text[];
 }
 
-type BookingStep = "name" | "business" | "email" | "need";
+type BookingStep = "name" | "business" | "email" | "need" | "consent";
 
 export interface ChatState {
   lastIntent: string | null;
   lang: Lang;
-  booking: { step: BookingStep; name: string; business: string; email: string } | null;
+  booking: { step: BookingStep; name: string; business: string; email: string; need: string } | null;
+  /** Identificador de la conversación en el servidor. Solo vive en memoria, nunca en el almacenamiento. */
+  conversationId: string | null;
 }
 
 export interface Reply {
   text: string;
   suggestions: string[];
   state: ChatState;
+  /** Solicitud lista para enviar: solo existe después de que la persona aceptó la política. */
+  lead?: LeadInput;
 }
 
-export const initialState: ChatState = { lastIntent: null, lang: "en", booking: null };
+export const initialState: ChatState = { lastIntent: null, lang: "en", booking: null, conversationId: null };
 
 const S = {
   demo: { en: "Book a demo", es: "Agendar una demo" },
@@ -151,8 +158,8 @@ const INTENTS: Intent[] = [
     id: "sofia",
     keywords: ["are you a bot", "are you real", "are you human", "are you ai", "your name", "who is sofia", "sofia", "eres un bot", "eres real", "eres humana", "eres ia", "tu nombre", "quien eres", "robot"],
     answer: {
-      en: "I'm Sofía, a virtual assistant, not a person. On this prototype I answer from Operativa.ia's built-in knowledge. If you need a person, I can pass your request to the team.",
-      es: "Soy Sofía, una asistente virtual, no una persona. En este prototipo respondo con la información integrada de Operativa.ia. Si necesitas a una persona, puedo pasarle tu solicitud al equipo.",
+      en: "I'm Sofía, an AI assistant, not a person, and I can make mistakes. If you need a person, I can pass your request to the team.",
+      es: "Soy Sofía, una asistente de IA, no una persona, y puedo equivocarme. Si necesitas a una persona, puedo pasarle tu solicitud al equipo.",
     },
     suggestions: [S.demo, S.services],
   },
@@ -264,7 +271,13 @@ const BOOKING_PROMPTS: Record<BookingStep, Text> = {
   business: { en: "Nice to meet you, {name}. What's the name of your business?", es: "Mucho gusto, {name}. ¿Cómo se llama tu negocio?" },
   email: { en: "Which email should the team use to reach you?", es: "¿A qué correo te puede escribir el equipo?" },
   need: { en: "Last one: what would you like the assistant to help with?", es: "Última pregunta: ¿con qué te gustaría que te ayudara el asistente?" },
+  consent: {
+    en: "Can the team store these details to contact you about your demo? They're handled as described in our Privacy Policy (#/privacy). Reply yes or no.",
+    es: "¿Podemos guardar estos datos para contactarte sobre tu demo? Se tratan como explica nuestra Política de Privacidad (#/privacy). Responde sí o no.",
+  },
 };
+
+const NO_WORDS = ["no", "nope", "no thanks", "no gracias", "mejor no"];
 
 function continueBooking(raw: string, state: ChatState): Reply {
   const booking = state.booking!;
@@ -298,20 +311,31 @@ function continueBooking(raw: string, state: ChatState): Reply {
       }
       return ask({ ...booking, step: "need", email: text }, BOOKING_PROMPTS.need);
     case "need": {
-      const saved = saveLead(
-        { name: booking.name, business: booking.business, email: booking.email, topic: "Book a demo", message: text.slice(0, 2000) },
-        "sofia",
-      );
-      const done: Text = saved
-        ? {
-            en: `Thanks, ${booking.name}! I saved your demo request. This prototype stores it on this device only, so nobody has been notified yet.`,
-            es: `¡Gracias, ${booking.name}! Guardé tu solicitud de demo. Este prototipo la almacena solo en este dispositivo, así que todavía no se ha avisado a nadie.`,
-          }
-        : {
-            en: "I couldn't save your request because this browser blocks local storage. Please try the contact form in another browser.",
-            es: "No pude guardar tu solicitud porque este navegador bloquea el almacenamiento local. Prueba el formulario de contacto en otro navegador.",
-          };
-      return { text: done[lang], suggestions: pick(lang, [S.how, S.tools]), state: { ...state, booking: null, lastIntent: null } };
+      const need = text.slice(0, 2000);
+      if (need.length < 10) {
+        return ask(booking, { en: "Could you tell me a bit more? (at least 10 characters)", es: "¿Me cuentas un poco más? (al menos 10 caracteres)" });
+      }
+      return ask({ ...booking, step: "consent", need }, BOOKING_PROMPTS.consent);
+    }
+    case "consent": {
+      const answer = normalize(text);
+      const finished = { ...state, booking: null, lastIntent: null };
+      if (hasAny(answer, YES_WORDS) && !hasAny(answer, NO_WORDS)) {
+        return {
+          text: "",
+          suggestions: pick(lang, [S.how, S.tools]),
+          state: finished,
+          lead: { name: booking.name, business: booking.business, email: booking.email, topic: "Book a demo", message: booking.need, consent: true },
+        };
+      }
+      if (hasAny(answer, NO_WORDS)) {
+        return {
+          text: lang === "es" ? "Entendido, no guardé nada. ¿Te ayudo con algo más?" : "Understood, I didn't save anything. Can I help with anything else?",
+          suggestions: pick(lang, [S.services, S.how]),
+          state: finished,
+        };
+      }
+      return ask(booking, BOOKING_PROMPTS.consent);
     }
   }
 }
@@ -327,7 +351,7 @@ export function respondLocally(rawMessage: string, previous: ChatState): Reply {
   const startBooking = (): Reply => ({
     text: BOOKING_PROMPTS.name[lang],
     suggestions: [],
-    state: { ...state, booking: { step: "name", name: "", business: "", email: "" }, lastIntent: "booking" },
+    state: { ...state, booking: { step: "name", name: "", business: "", email: "", need: "" }, lastIntent: "booking" },
   });
 
   // Solo tras ofrecer cotización, un "sí" inicia la solicitud
@@ -354,15 +378,67 @@ export function respondLocally(rawMessage: string, previous: ChatState): Reply {
 }
 
 export const WELCOME: Reply = {
-  text: "Hi, I'm Sofía! Ask me anything about Operativa.ia, in English or Spanish.",
+  text: "Hi, I'm Sofía, Operativa.ia's AI assistant! Ask me anything, in English or Spanish.",
   suggestions: [S.services.en, S.how.en, S.price.en, S.demo.en],
   state: initialState,
 };
 
-/** Punto único de conexión con la API futura. */
+const SUBMIT_REPLIES: Record<"sent" | "invalid" | "rate_limited" | "error", (name: string) => Text> = {
+  sent: (name) => ({
+    en: `Thanks, ${name}! Your demo request was sent to the team. They'll reach out by email.`,
+    es: `¡Gracias, ${name}! Tu solicitud de demo llegó al equipo. Te escribirán por correo.`,
+  }),
+  invalid: () => ({
+    en: "Some details didn't pass our checks. Could you try the contact form instead?",
+    es: "Algunos datos no pasaron la validación. ¿Puedes intentarlo con el formulario de contacto?",
+  }),
+  rate_limited: () => ({
+    en: "We've received many requests from this connection. Please try again in a few minutes.",
+    es: "Recibimos muchas solicitudes desde esta conexión. Intenta de nuevo en unos minutos.",
+  }),
+  error: () => ({
+    en: "I couldn't send your request right now. Please try again later or use the contact form.",
+    es: "No pude enviar tu solicitud ahora. Intenta más tarde o usa el formulario de contacto.",
+  }),
+};
+
+interface ChatApiReply {
+  status: "success" | "error" | "limited";
+  conversation_id: string;
+  agent_response: string;
+}
+
+const pause = (text: string) => new Promise((resolve) => setTimeout(resolve, Math.min(1400, 450 + text.length * 5)));
+
+/**
+ * Punto único de conexión del widget.
+ * El flujo de demo y su envío son locales y explícitos; las demás preguntas van a la API.
+ */
 export async function askSofia(message: string, state: ChatState): Promise<Reply> {
-  const reply = respondLocally(message, state);
-  const pause = Math.min(1400, 450 + reply.text.length * 5);
-  await new Promise((resolve) => setTimeout(resolve, pause));
-  return reply;
+  const local = respondLocally(message, state);
+
+  if (local.lead) {
+    const result = await submitLead(local.lead, "sofia");
+    return { ...local, text: SUBMIT_REPLIES[result](local.lead.name)[local.state.lang], lead: undefined };
+  }
+  if (state.booking || local.state.booking) {
+    await pause(local.text);
+    return local;
+  }
+
+  const api = await postJson<ChatApiReply>("/chat", {
+    message: message.slice(0, 2000),
+    ...(state.conversationId ? { conversation_id: state.conversationId } : {}),
+  });
+  if (api.ok && api.data.status === "success" && typeof api.data.agent_response === "string") {
+    return {
+      text: api.data.agent_response,
+      suggestions: pick(local.state.lang, [S.demo, S.services]),
+      state: { ...local.state, lastIntent: null, conversationId: api.data.conversation_id ?? state.conversationId },
+    };
+  }
+
+  // Respaldo: la API no está disponible o llegó a su límite; el motor local sigue ayudando
+  await pause(local.text);
+  return { ...local, state: { ...local.state, conversationId: api.ok ? api.data.conversation_id : state.conversationId } };
 }

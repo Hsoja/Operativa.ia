@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { PageHero, PrototypeNote } from "../components/ui";
-import { clearLeads, getLeads } from "../lib/leads";
 
-const UPDATED = "November 2, 2026";
+const UPDATED = "November 16, 2026";
 
 function LegalPage({ eyebrow, title, intro, children }: { eyebrow: string; title: string; intro: string; children: ReactNode }) {
   return (
@@ -54,34 +53,6 @@ export function Terms() {
   );
 }
 
-function ClearData() {
-  const [count, setCount] = useState(() => getLeads().length);
-  const [message, setMessage] = useState("");
-  return (
-    <div className="glass mt-5 rounded-2xl p-5">
-      <p className="!text-cream">
-        Messages saved on this device: <strong>{count}</strong>
-      </p>
-      <button
-        className="btn btn-ghost mt-3 !min-h-11 !py-2 !text-sm"
-        disabled={count === 0}
-        onClick={() => {
-          const ok = clearLeads();
-          if (ok) setCount(0);
-          setMessage(ok ? "Your saved messages were deleted from this device." : "We couldn't access this browser's storage.");
-        }}
-      >
-        Delete my saved messages
-      </button>
-      {message && (
-        <p role="status" className="mt-2 text-sm">
-          {message}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function Privacy() {
   return (
     <LegalPage eyebrow="Legal" title="Privacy Policy" intro="What information this site collects, why, and the choices you have.">
@@ -91,17 +62,16 @@ export function Privacy() {
         <li><strong>Chat with Sofía:</strong> what you type, and your name, business, email and need if you request a demo.</li>
       </ul>
       <p>Please don't share passwords, payment details, health information or other sensitive data.</p>
-      <h2>2. Where it's stored today</h2>
-      <p>In this version of the prototype, contact and demo requests are saved only in your own browser's local storage. They aren't sent to our team or to a server. Chat conversations aren't saved and disappear when you close or reload the page.</p>
-      <ClearData />
-      <h2>3. Why we use it</h2>
+      <h2>2. Where it's stored and for how long</h2>
+      <p>Contact and demo requests are sent to our server only after you accept this policy, and are kept until your request is handled or you ask us to delete them. Chat messages are stored on our server so the assistant can follow the conversation, and are deleted automatically after 90 days without activity. Nothing is saved in your browser's storage.</p>
+      <h2>3. Who processes it</h2>
+      <p>Chat messages are processed by our AI provider (Groq) to generate Sofía's answers. We don't send your contact details to that provider. Server logs record technical events only, with identifiers replaced by pseudonyms.</p>
+      <h2>4. Why we use it</h2>
       <p>To answer your request and prepare a demo if you ask for one. We don't sell your information or use it for advertising.</p>
-      <h2>4. Future changes</h2>
-      <p>When the prototype connects to its server and AI providers, requests may be stored on that server and chat messages may be processed by those providers. We'll update this policy before that happens, including who receives the data and how long it's kept.</p>
       <h2>5. Cookies and tracking</h2>
       <p>This site doesn't use advertising or analytics cookies. Fonts are served from the site itself, so no third-party font service sees your visit.</p>
       <h2>6. Your choices</h2>
-      <p>You can delete requests saved on this device with the button above, or by clearing your browser's site data. Depending on where you live, you may also have rights to access, correct or delete personal data.</p>
+      <p>You can ask us to access, correct or delete your personal data at any time through the contact page. Depending on where you live, privacy laws such as Canada's PIPEDA may give you additional rights.</p>
       <h2>7. Children</h2>
       <p>This site is intended for business owners and teams. It isn't directed at children.</p>
       <h2>8. Contact</h2>
