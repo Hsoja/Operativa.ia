@@ -10,62 +10,50 @@ from app.core.config import get_settings
 from app.core.db import get_connection
 from app.core.ratelimit import limiter
 from app.services import auth
-
-ORIGIN = {"Origin": "http://localhost:8501"}
-PASSWORD = "-".join(["contrasena", "de", "prueba", "1"])
+from helpers import ORIGIN, PASSWORD, PROD, csrf_headers, make_tenant, make_user, reset_db
+from helpers import login as do_login
 
 
 @pytest.fixture(autouse=True)
 def clean_db(client):
     limiter.reset()
-    with get_connection() as db:
-        for table in ("sessions", "login_attempts", "admin_users"):
-            db.execute(f"DELETE FROM {table}")  # nosec B608 - nombres fijos de la prueba
-    auth.create_admin("admin", PASSWORD)
-
-
-def csrf_headers(c):
-    token = c.get("/api/v1/admin/csrf").json()["csrf_token"]
-    return {**ORIGIN, "X-CSRF-Token": token}
-
-
-def do_login(c, username="admin", password=PASSWORD):
-    return c.post("/api/v1/admin/login", json={"username": username, "password": password}, headers=csrf_headers(c))
+    reset_db()
+    make_user(make_tenant("demo"), "admin", "owner")
 
 
 def test_password_stored_as_argon2id():
     with get_connection() as db:
-        stored = db.execute("SELECT password_hash FROM admin_users").fetchone()["password_hash"]
+        stored = db.execute("SELECT password_hash FROM users").fetchone()["password_hash"]
     assert stored.startswith("$argon2id$") and PASSWORD not in stored
 
 
 def test_rehash_on_login_when_params_change(client):
     weak = PasswordHasher(time_cost=1, memory_cost=8192, parallelism=1).hash(PASSWORD)
     with get_connection() as db:
-        db.execute("UPDATE admin_users SET password_hash = ?", (weak,))
+        db.execute("UPDATE users SET password_hash = ?", (weak,))
     assert do_login(client).status_code == 200
     with get_connection() as db:
-        stored = db.execute("SELECT password_hash FROM admin_users").fetchone()["password_hash"]
+        stored = db.execute("SELECT password_hash FROM users").fetchone()["password_hash"]
     assert stored != weak and "m=65536,t=3,p=4" in stored
 
 
 def test_no_default_admin_exists_on_fresh_db():
     with get_connection() as db:
-        db.execute("DELETE FROM admin_users")
+        db.execute("DELETE FROM users")
     assert auth.authenticate("admin", "admin") is None
 
 
 def test_login_and_me(client):
     r = do_login(client)
     assert r.status_code == 200 and r.json()["username"] == "admin"
-    assert client.get("/api/v1/admin/me").json() == {"username": "admin", "role": "admin"}
+    assert client.get("/api/v1/admin/me").json() == {"username": "admin", "role": "owner", "tenant": "demo"}
 
 
 def test_admin_routes_require_session(client):
     assert client.get("/api/v1/admin/me").status_code == 401
-    assert client.get("/api/v1/agent/prompt").status_code == 401
+    assert client.get("/api/v1/admin/agent/prompt").status_code == 401
     do_login(client)
-    assert "Sofía" in client.get("/api/v1/agent/prompt").json()["system_prompt"]
+    assert "Sofía" in client.get("/api/v1/admin/agent/prompt").json()["system_prompt"]
 
 
 def test_no_user_enumeration(client):
@@ -138,14 +126,14 @@ def test_login_validation(client, body):
 
 @pytest.mark.parametrize(
     "payload",
-    ["' OR '1'='1", "admin'; DROP TABLE admin_users;--", '" OR ""="', "x' UNION SELECT 1,2,3,4,5--"],
+    ["' OR '1'='1", "admin'; DROP TABLE users;--", '" OR ""="', "x' UNION SELECT 1,2,3,4,5--"],
 )
 def test_sql_injection_payloads_are_inert(payload):
     assert auth.authenticate(payload, payload) is None
     assert auth.reset_password(payload, "x" * 20) is False
     assert auth.get_session(payload) is None
     with get_connection() as db:
-        assert db.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
 
 
 def test_login_requires_csrf_token(client):
@@ -209,7 +197,7 @@ def test_session_expires(client):
 
 
 def test_cookie_flags_in_production(make_client):
-    c = make_client(ENV="production", ALLOWED_ORIGINS="https://app.example.com")
+    c = make_client(**PROD)
     c.base_url = "https://testserver"
     r = c.get("/api/v1/admin/csrf")
     token = r.json()["csrf_token"]
@@ -231,19 +219,32 @@ def _answers(monkeypatch, *answers):
     monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(values))
 
 
-def test_cli_create_admin(monkeypatch):
+NEW_USER = ["create-user", "--tenant", "demo", "--role", "staff", "--username"]
+
+
+def test_cli_create_user(monkeypatch):
     _answers(monkeypatch, "otra-clave-larga-1", "otra-clave-larga-1")
-    assert cli.main(["create-admin", "--username", "segundo"]) == 0
-    assert auth.authenticate("segundo", "otra-clave-larga-1")
+    assert cli.main([*NEW_USER, "segundo"]) == 0
+    user = auth.authenticate("segundo", "otra-clave-larga-1")
+    assert user["role"] == "staff" and user["tenant_slug"] == "demo"
 
 
-def test_cli_rejects_short_mismatch_and_duplicate(monkeypatch):
+def test_cli_rejects_short_mismatch_duplicate_and_unknown_tenant(monkeypatch):
     _answers(monkeypatch, "corta", "corta")
-    assert cli.main(["create-admin", "--username", "tercero"]) == 2
+    assert cli.main([*NEW_USER, "tercero"]) == 2
     _answers(monkeypatch, "otra-clave-larga-1", "distinta-clave-larga")
-    assert cli.main(["create-admin", "--username", "tercero"]) == 2
+    assert cli.main([*NEW_USER, "tercero"]) == 2
     _answers(monkeypatch, "otra-clave-larga-1", "otra-clave-larga-1")
-    assert cli.main(["create-admin", "--username", "admin"]) == 1
+    assert cli.main([*NEW_USER, "admin"]) == 1
+    assert cli.main(["create-user", "--tenant", "no-existe", "--role", "owner", "--username", "x-y-z"]) == 1
+    assert cli.main([*NEW_USER, "mal usuario"]) == 2
+
+
+def test_cli_create_tenant_validates(monkeypatch):
+    assert cli.main(["create-tenant", "--slug", "clinica-sol", "--name", "Clínica Sol"]) == 0
+    assert cli.main(["create-tenant", "--slug", "clinica-sol", "--name", "Otra"]) == 1
+    assert cli.main(["create-tenant", "--slug", "Mal Slug", "--name", "X Y"]) == 2
+    assert cli.main(["create-tenant", "--slug", "zona-mala", "--name", "X Y", "--timezone", "Marte/Base"]) == 2
 
 
 def test_cli_reset_password_invalidates_sessions_and_unlocks(client, monkeypatch):

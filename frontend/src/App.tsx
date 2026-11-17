@@ -6,12 +6,14 @@ import { ChatWidget } from "./components/ChatWidget";
 import { Footer, Header, PageTransition } from "./components/Layout";
 import { useRoute, type Route } from "./lib/router";
 import { About } from "./pages/About";
+import { Book } from "./pages/Book";
 import { Contact } from "./pages/Contact";
 import { Home } from "./pages/Home";
 import { Privacy, Terms } from "./pages/Legal";
 import { NotFound } from "./pages/NotFound";
 import { Reviews } from "./pages/Reviews";
 import { Services } from "./pages/Services";
+import { Unsubscribe } from "./pages/Unsubscribe";
 
 const PAGES: Record<Route, { title: string; element: JSX.Element }> = {
   home: { title: "Operativa.ia — AI that fits your business", element: <Home /> },
@@ -21,6 +23,8 @@ const PAGES: Record<Route, { title: string; element: JSX.Element }> = {
   contact: { title: "Contact — Operativa.ia", element: <Contact /> },
   terms: { title: "Terms & Conditions — Operativa.ia", element: <Terms /> },
   privacy: { title: "Privacy Policy — Operativa.ia", element: <Privacy /> },
+  book: { title: "Book an appointment — Operativa.ia", element: <Book /> },
+  unsubscribe: { title: "Unsubscribe — Operativa.ia", element: <Unsubscribe /> },
   notfound: { title: "Page not found — Operativa.ia", element: <NotFound /> },
 };
 

@@ -1,13 +1,22 @@
 # Proxy de producción. Caddy obtiene el certificado y redirige HTTP a HTTPS por sí solo.
-# Uso: DOMAIN=app.ejemplo.com caddy run --config deploy/Caddyfile
-# Solo se publican estas rutas: el proxy nunca sirve archivos del disco (.env, .git, secrets/).
+# Uso: DOMAIN=app.ejemplo.com SITE_ROOT=/srv/operativa/frontend/dist caddy run --config deploy/Caddyfile
+#
+# Qué se publica:
+#   /api/*  y /health  -> API FastAPI en 127.0.0.1:8000 (trae sus propias cabeceras y CSP)
+#   todo lo demás      -> archivos del build de React (npm run build), con CSP estricta
+# Qué NO se publica:
+#   el panel Streamlit (127.0.0.1:8501). Se usa solo por túnel SSH: ssh -L 8501:127.0.0.1:8501 servidor
+#   ningún archivo fuera de SITE_ROOT (.env, .git, secrets/, backend/)
 {$DOMAIN} {
+	encode zstd gzip
+
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
 		-Server
 	}
 
@@ -21,8 +30,16 @@
 	handle /health {
 		reverse_proxy 127.0.0.1:8000
 	}
+
 	handle {
-		header Content-Security-Policy "frame-ancestors 'none'"
-		reverse_proxy 127.0.0.1:8501
+		# Misma CSP que frontend/vite.config.ts (probada con `vite preview`)
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		root * "{$SITE_ROOT:/srv/operativa/frontend/dist}"
+		# El sitio usa rutas con # (#/contact), así que no hace falta devolver index.html para todo:
+		# una ruta que no es un archivo del build da 404 (incluidas /.env, /.git/config y /docs)
+		file_server {
+			hide .*
+		}
 	}
 }

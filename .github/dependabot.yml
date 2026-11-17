@@ -1,14 +1,22 @@
 version: 2
+# cooldown: Dependabot espera 7 días desde la publicación de una versión antes de proponerla.
+# Reduce el riesgo de paquetes comprometidos que se retiran en sus primeros días (cadena de suministro).
 updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

@@ -21,7 +21,10 @@ logger = logging.getLogger("operativa.security")
 logger.propagate = False
 
 # Campos que jamás deben llegar al log aunque alguien los pase por error
-FORBIDDEN_FIELDS = {"password", "token", "secret", "api_key", "message", "email", "phone", "ip", "cookie"}
+FORBIDDEN_FIELDS = {
+    "password", "token", "secret", "api_key", "message", "email", "phone", "ip", "cookie",
+    "name", "content", "username", "history", "body", "signature",
+}
 ALERT_WINDOW_SECONDS = 300
 ALERTED_EVENTS = {
     "login_failed",
@@ -30,6 +33,7 @@ ALERTED_EVENTS = {
     "prompt_injection_suspected",
     "tool_args_rejected",
     "csrf_rejected",
+    "role_denied",
 }
 
 _process_salt = secrets.token_hex(16)

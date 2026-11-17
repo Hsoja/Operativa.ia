@@ -6,7 +6,8 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from app.api.admin import router as admin_router
-from app.api.endpoints import router
+from app.api.public import router as public_router
+from app.api.webhooks import router as webhooks_router
 from app.core.config import get_settings
 from app.core.db import get_connection
 from app.core.logs import configure_logging, security_event
@@ -52,9 +53,10 @@ def create_app() -> FastAPI:
     # Se agrega al final para quedar por fuera de CORS y cubrir todas las respuestas
     app.add_middleware(SecurityMiddleware)
 
-    # Conectar las rutas del agente conversacional
-    app.include_router(router)
+    # Rutas públicas por negocio (chat y contacto) y rutas privadas del panel
+    app.include_router(public_router)
     app.include_router(admin_router)
+    app.include_router(webhooks_router)
 
     @app.get("/")
     def read_root():

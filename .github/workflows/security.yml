@@ -24,6 +24,26 @@ jobs:
       - run: bandit -q -r app ../frontend/app.py --severity-level medium
       - run: bash ../scripts/scan_exposed_files.sh
 
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+      # --ignore-scripts: ningún paquete ejecuta código al instalarse
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+      - run: npm test
+      - run: npm run build
+      # El uso de HTML crudo se revisa sobre src/ (tests/security.test.ts); React lo menciona en su propio código
+      - name: Sin llaves en el paquete publicado
+        run: |
+          ! grep -rEn 'gsk_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{30,}|\bsk-[A-Za-z0-9_-]{20,}' dist/
+
   secrets:
     runs-on: ubuntu-latest
     steps:

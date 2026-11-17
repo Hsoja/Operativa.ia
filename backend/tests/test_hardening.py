@@ -5,18 +5,20 @@ import pytest
 from app.core.config import get_settings
 from app.core.logs import security_event
 
+from helpers import PROD
+
 ORIGIN = "http://localhost:8501"
-PROD = {"ENV": "production", "ALLOWED_ORIGINS": "https://app.example.com"}
+CHAT = "/api/v1/public/demo/chat"
 
 
 def test_cors_allows_only_configured_origin(client):
     ok = client.options(
-        "/api/v1/chat",
+        CHAT,
         headers={"Origin": ORIGIN, "Access-Control-Request-Method": "POST"},
     )
     assert ok.headers["access-control-allow-origin"] == ORIGIN
     bad = client.options(
-        "/api/v1/chat",
+        CHAT,
         headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in bad.headers
@@ -25,12 +27,12 @@ def test_cors_allows_only_configured_origin(client):
 
 def test_cors_rejects_disallowed_method_and_header(client):
     r = client.options(
-        "/api/v1/chat",
+        CHAT,
         headers={"Origin": ORIGIN, "Access-Control-Request-Method": "DELETE"},
     )
     assert r.status_code == 400
     r = client.options(
-        "/api/v1/chat",
+        CHAT,
         headers={
             "Origin": ORIGIN,
             "Access-Control-Request-Method": "POST",
@@ -48,7 +50,7 @@ def test_wildcard_origins_refuse_to_start(make_client, origins):
 
 def test_production_requires_https_origins(make_client):
     with pytest.raises(ValueError):
-        make_client(ENV="production", ALLOWED_ORIGINS="http://app.example.com")
+        make_client(**{**PROD, "ALLOWED_ORIGINS": "http://app.example.com"})
 
 
 def test_security_headers_present(client):
@@ -71,7 +73,7 @@ def test_hsts_only_in_production(make_client):
 
 def test_headers_also_on_404_and_413(client):
     assert client.get("/no-existe").headers["x-content-type-options"] == "nosniff"
-    big = client.post("/api/v1/chat", content=b"x" * 70000, headers={"Content-Type": "application/json"})
+    big = client.post(CHAT, content=b"x" * 70000, headers={"Content-Type": "application/json"})
     assert big.status_code == 413
     assert big.headers["x-content-type-options"] == "nosniff"
 
@@ -81,7 +83,7 @@ def test_chunked_body_over_limit_rejected(client):
         for _ in range(8):
             yield b"x" * 10000
 
-    assert client.post("/api/v1/chat", content=chunks()).status_code == 413
+    assert client.post(CHAT, content=chunks()).status_code == 413
 
 
 @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])

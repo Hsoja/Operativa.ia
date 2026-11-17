@@ -15,6 +15,8 @@ os.environ.update(
     CHAT_RATE="1000/minute",
     LOGIN_RATE="1000/minute",
     ADMIN_RATE="1000/minute",
+    BROWSE_RATE="1000/minute",
+    CONTACT_RATE="1000/minute",
     CALENDAR_ENABLED="false",
 )
 os.environ.pop("TRUSTED_PROXIES", None)

@@ -4,10 +4,16 @@ import { useState, type FormEvent } from "react";
 
 import { useChat } from "../components/ChatContext";
 import { RobotHead } from "../components/Robot";
-import { Card, PageHero, PrototypeNote, Reveal } from "../components/ui";
-import { saveLead, TOPICS, validateLead, type LeadErrors, type LeadInput } from "../lib/leads";
+import { Card, PageHero, Reveal } from "../components/ui";
+import { submitLead, TOPICS, validateLead, type LeadErrors, type LeadInput, type SubmitResult } from "../lib/leads";
 
-const EMPTY: LeadInput = { name: "", email: "", business: "", topic: TOPICS[0], message: "", consent: false };
+const FAILURES: Record<Exclude<SubmitResult, "sent">, string> = {
+  invalid: "Some details didn't pass our checks. Please review them and try again.",
+  rate_limited: "We've received many messages from this connection. Please try again in a few minutes.",
+  error: "We couldn't send your message right now. Please try again later, or chat with Sofía.",
+};
+
+const EMPTY: LeadInput = { name: "", email: "", business: "", topic: TOPICS[0], message: "", consent: false, marketing: false };
 
 function Field({ label, id, error, children }: { label: string; id: string; error?: string; children: React.ReactNode }) {
   return (
@@ -29,7 +35,7 @@ export function Contact() {
   const { openChat } = useChat();
   const [form, setForm] = useState<LeadInput>(EMPTY);
   const [errors, setErrors] = useState<LeadErrors>({});
-  const [status, setStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | Exclude<SubmitResult, "sent">>("idle");
   const [trap, setTrap] = useState("");
 
   const update = <K extends keyof LeadInput>(key: K, value: LeadInput[K]) => {
@@ -39,11 +45,12 @@ export function Contact() {
 
   const a11y = (key: keyof LeadInput) => ({ "aria-invalid": Boolean(errors[key]), "aria-describedby": errors[key] ? `${key}-error` : undefined });
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-    // Campo invisible: solo un bot lo rellena
+    if (status === "sending") return;
+    // Campo invisible: solo un bot lo rellena; se le muestra éxito sin enviar nada
     if (trap) {
-      setStatus("saved");
+      setStatus("sent");
       return;
     }
     const found = validateLead(form);
@@ -52,10 +59,10 @@ export function Contact() {
       document.getElementById(Object.keys(found)[0])?.focus();
       return;
     }
-    const { consent: _consent, ...lead } = form;
-    const saved = saveLead(lead, "contact-form");
-    setStatus(saved ? "saved" : "failed");
-    if (saved) setForm(EMPTY);
+    setStatus("sending");
+    const result = await submitLead(form, "contact-form");
+    setStatus(result);
+    if (result === "sent") setForm(EMPTY);
   };
 
   return (
@@ -73,17 +80,17 @@ export function Contact() {
         <Reveal>
           <Card className="p-6 sm:p-9">
             <AnimatePresence mode="wait">
-              {status === "saved" ? (
-                <motion.div key="saved" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="py-10 text-center" role="status">
+              {status === "sent" ? (
+                <motion.div key="sent" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="py-10 text-center" role="status">
                   <RobotHead mood="happy" className="mx-auto h-24 w-24" />
-                  <h2 className="mt-5 text-3xl font-semibold tracking-tight">Message saved!</h2>
-                  <p className="mx-auto mt-3 max-w-md leading-relaxed text-mute">Thanks for writing. This prototype stores your message on this device only, so it hasn't been sent to the team yet.</p>
+                  <h2 className="mt-5 text-3xl font-semibold tracking-tight">Message sent!</h2>
+                  <p className="mx-auto mt-3 max-w-md leading-relaxed text-mute">Thanks for writing. The team will review your message and reply by email.</p>
                   <button onClick={() => setStatus("idle")} className="btn btn-ghost mt-7">
                     Send another message
                   </button>
                 </motion.div>
               ) : (
-                <motion.form key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onSubmit={submit} noValidate className="space-y-5">
+                <motion.form key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onSubmit={(event) => void submit(event)} noValidate aria-busy={status === "sending"} className="space-y-5">
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field label="Your name" id="name" error={errors.name}>
                       <input id="name" className="field" autoComplete="name" maxLength={80} value={form.name} onChange={(e) => update("name", e.target.value)} {...a11y("name")} />
@@ -122,19 +129,23 @@ export function Contact() {
                         and agree to my details being stored to answer this request.
                       </span>
                     </label>
+                    <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-mute">
+                      <input id="marketing" type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[#ff5a1f]" checked={form.marketing === true} onChange={(e) => update("marketing", e.target.checked)} />
+                      <span>Optional: send me occasional news and offers from Operativa.ia by email. I can unsubscribe at any time.</span>
+                    </label>
                     {errors.consent && (
                       <p id="consent-error" role="alert" className="mt-1.5 text-sm text-[#ff8a70]">
                         {errors.consent}
                       </p>
                     )}
                   </div>
-                  {status === "failed" && (
+                  {(status === "invalid" || status === "rate_limited" || status === "error") && (
                     <p role="alert" className="rounded-xl border border-[#ff8a70]/40 bg-[#ff8a70]/10 px-4 py-3 text-sm">
-                      We couldn't save your message because this browser blocks local storage. Please try another browser.
+                      {FAILURES[status]}
                     </p>
                   )}
-                  <button type="submit" className="btn btn-primary w-full sm:w-auto">
-                    Send message <ArrowRight size={18} />
+                  <button type="submit" className="btn btn-primary w-full sm:w-auto" disabled={status === "sending"}>
+                    {status === "sending" ? "Sending…" : "Send message"} <ArrowRight size={18} aria-hidden="true" />
                   </button>
                 </motion.form>
               )}
@@ -160,7 +171,6 @@ export function Contact() {
             <h2 className="mt-4 text-xl font-semibold tracking-tight">Your details are yours</h2>
             <p className="mt-2 leading-relaxed text-mute">We only use them to answer you. Please don't include passwords or sensitive data.</p>
           </Card>
-          <PrototypeNote>For now, messages are saved in your browser while this prototype is being connected.</PrototypeNote>
         </Reveal>
       </section>
     </>

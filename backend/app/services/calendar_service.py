@@ -4,6 +4,7 @@ Maneja la autenticación OAuth 2.0 y la creación automática de eventos/citas.
 """
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Annotated
 
 from google.auth.transport.requests import Request
@@ -33,6 +34,16 @@ class AppointmentArgs(StrictModel):
     description: CleanStr(min_length=0, max_length=2000)
     start_time_iso: Annotated[str, Field(max_length=40)]
     duration_minutes: Annotated[int, Field(ge=5, le=480)] = 45
+    timezone: Annotated[str, Field(max_length=64)] = "America/Toronto"
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Zona horaria desconocida.") from None
+        return value
 
     @field_validator("start_time_iso")
     @classmethod
@@ -85,6 +96,7 @@ def create_appointment(
     description: str,
     start_time_iso: str,
     duration_minutes: int = 45,
+    timezone: str = "America/Toronto",
 ) -> dict:
     """Agenda una cita en el calendario principal de Google.
 
@@ -93,6 +105,7 @@ def create_appointment(
         description: Detalles de contacto y tratamiento.
         start_time_iso: Fecha y hora de inicio en formato ISO (ej. "2026-10-28T10:00:00").
         duration_minutes: Duración de la cita en minutos.
+        timezone: Zona horaria IANA del negocio (sale de su perfil, nunca del cliente final).
     """
     try:
         args = AppointmentArgs(
@@ -100,6 +113,7 @@ def create_appointment(
             description=description,
             start_time_iso=start_time_iso,
             duration_minutes=duration_minutes,
+            timezone=timezone,
         )
     except ValidationError as e:
         fields = [".".join(str(p) for p in err["loc"]) for err in e.errors()]
@@ -116,11 +130,11 @@ def create_appointment(
             "description": args.description,
             "start": {
                 "dateTime": start_dt.isoformat(),
-                "timeZone": "America/Mexico_City",  # Ajusta según tu zona horaria
+                "timeZone": args.timezone,
             },
             "end": {
                 "dateTime": end_dt.isoformat(),
-                "timeZone": "America/Mexico_City",
+                "timeZone": args.timezone,
             },
             "reminders": {
                 "useDefault": False,

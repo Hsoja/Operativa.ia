@@ -11,7 +11,7 @@
   --color-ink-3: #1f1511;
   --color-cream: #fff7f0;
   --color-mute: #b7a79d;
-  --color-faint: #85756b;
+  --color-faint: #958479; /* 5:1 o más sobre los tres fondos (WCAG AA) */
   --color-ember: #ff5a1f;
   --color-flame: #e5173f;
   --color-glow: #ffb347;

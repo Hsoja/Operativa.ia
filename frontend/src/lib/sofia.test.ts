@@ -1,18 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getLeads, validateLead } from "./leads";
-import { initialState, respondLocally } from "./sofia";
+import { submitLead, validateLead } from "./leads";
+import { askSofia, initialState, respondLocally } from "./sofia";
 
 const PRICE = /[$€£]\s?\d|\d[\d.,]*\s?(usd|mxn|eur|pesos?|d[oó]lar|euros?)/i;
 
+const fetchMock = vi.fn();
+
 beforeEach(() => {
-  const store = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-  });
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+  // El navegador no debe guardar datos personales: cualquier acceso al almacenamiento hace fallar la prueba
+  const forbidden = () => {
+    throw new Error("storage access");
+  };
+  vi.stubGlobal("localStorage", { getItem: forbidden, setItem: forbidden, removeItem: forbidden });
+  vi.stubGlobal("sessionStorage", { getItem: forbidden, setItem: forbidden, removeItem: forbidden });
 });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+const respond = (status: number, body: unknown = {}) =>
+  fetchMock.mockResolvedValueOnce({ ok: status >= 200 && status < 300, status, json: async () => body });
 
 const say = (...messages: string[]) => {
   let state = initialState;
@@ -69,22 +81,118 @@ describe("precios", () => {
 });
 
 describe("solicitud de demo", () => {
-  it("guarda la solicitud completa", () => {
-    const reply = say("I want to book a demo", "Ana Pérez", "Clínica Sol", "ana@sol.com", "Answer common questions");
+  const steps = ["I want to book a demo", "Ana Pérez", "Clínica Sol", "ana@sol.example", "Answer common questions"];
+
+  it("pide consentimiento antes de preparar el envío", () => {
+    const reply = say(...steps);
+    expect(reply.state.booking?.step).toBe("consent");
+    expect(reply.text).toMatch(/Privacy Policy/);
+    expect(reply.lead).toBeUndefined();
+  });
+
+  it("con un sí prepara la solicitud completa", () => {
+    const reply = say(...steps, "yes");
     expect(reply.state.booking).toBeNull();
-    expect(reply.text).toMatch(/this device only/);
-    expect(getLeads()[0]).toMatchObject({ name: "Ana Pérez", business: "Clínica Sol", email: "ana@sol.com", source: "sofia" });
+    expect(reply.lead).toMatchObject({ name: "Ana Pérez", business: "Clínica Sol", email: "ana@sol.example", consent: true });
+  });
+
+  it.each(["ok wait", "yes but later", "maybe", "sí pero", "what data?"])("una respuesta ambigua no es consentimiento: %s", (answer) => {
+    const reply = say(...steps, answer);
+    expect(reply.lead).toBeUndefined();
+    expect(reply.state.booking?.step).toBe("consent");
+  });
+
+  it.each(["yes", "Sí", "acepto", "I agree"])("acepta un sí claro: %s", (answer) => {
+    expect(say(...steps, answer).lead).toBeDefined();
+  });
+
+  it("con un no no guarda nada", () => {
+    const reply = say(...steps, "no");
+    expect(reply.lead).toBeUndefined();
+    expect(reply.text).toMatch(/didn't save anything/);
   });
 
   it("rechaza un correo inválido y se puede cancelar", () => {
     expect(say("book a demo", "Ana Pérez", "Sol", "no-es-correo").state.booking?.step).toBe("email");
     expect(say("book a demo", "Ana Pérez", "cancel").state.booking).toBeNull();
-    expect(getLeads()).toHaveLength(0);
+  });
+
+  it("envía al servidor solo después del sí", async () => {
+    let state = initialState;
+    for (const message of steps) state = (await askSofiaFast(message, state)).state;
+    expect(fetchMock).not.toHaveBeenCalled();
+    respond(201, { status: "received" });
+    const reply = await askSofiaFast("sí", state);
+    expect(reply.text).toMatch(/sent to the team/);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/public/operativa/contact");
+    expect(JSON.parse(init.body)).toMatchObject({ source: "sofia", consent: true, email: "ana@sol.example" });
+    expect(init.credentials).toBe("omit");
+  });
+});
+
+async function askSofiaFast(message: string, state = initialState) {
+  vi.useFakeTimers();
+  const pending = askSofia(message, state);
+  await vi.runAllTimersAsync();
+  const reply = await pending;
+  vi.useRealTimers();
+  return reply;
+}
+
+describe("conexión con la API", () => {
+  it("usa la respuesta del servidor y recuerda la conversación", async () => {
+    respond(200, { status: "success", conversation_id: "c".repeat(24), agent_response: "Hola desde el servidor" });
+    const first = await askSofiaFast("What is the capital of Peru?");
+    expect(first.text).toBe("Hola desde el servidor");
+    respond(200, { status: "success", conversation_id: "c".repeat(24), agent_response: "Segunda" });
+    await askSofiaFast("And of Chile?", first.state);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ message: "And of Chile?", conversation_id: "c".repeat(24) });
+  });
+
+  it.each([
+    ["sin red", () => fetchMock.mockRejectedValueOnce(new TypeError("offline"))],
+    ["error del servidor", () => respond(503)],
+    ["límite de uso", () => respond(200, { status: "limited", conversation_id: "x".repeat(24), agent_response: "límite" })],
+  ])("si falla (%s) contesta el motor local", async (_label, fail) => {
+    fail();
+    const reply = await askSofiaFast("how does it work");
+    expect(reply.text).toMatch(/four steps/);
+  });
+
+  it("el texto del modelo se devuelve tal cual, sin interpretarlo", async () => {
+    const xss = "<img src=x onerror=alert(1)>";
+    respond(200, { status: "success", conversation_id: "c".repeat(24), agent_response: xss });
+    expect((await askSofiaFast("hola amigo")).text).toBe(xss);
+  });
+});
+
+describe("envío del formulario", () => {
+  const lead = { name: "Ana", email: "ana@sol.example", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
+
+  it.each([
+    [201, "sent"],
+    [422, "invalid"],
+    [429, "rate_limited"],
+    [500, "error"],
+  ])("HTTP %i → %s", async (status, expected) => {
+    respond(status as number);
+    expect(await submitLead(lead, "contact-form")).toBe(expected);
+  });
+
+  it("sin consentimiento no llama al servidor", async () => {
+    expect(await submitLead({ ...lead, consent: false }, "contact-form")).toBe("invalid");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sin red devuelve error", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    expect(await submitLead(lead, "contact-form")).toBe("error");
   });
 });
 
 describe("formulario", () => {
-  const good = { name: "Ana", email: "ana@sol.com", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
+  const good = { name: "Ana", email: "ana@sol.example", business: "", topic: "Book a demo", message: "Quiero saber más.", consent: true };
 
   it("acepta datos válidos", () => {
     expect(validateLead(good)).toEqual({});
