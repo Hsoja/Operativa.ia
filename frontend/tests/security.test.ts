@@ -4,7 +4,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const SRC = join(__dirname, "..", "src");
 
@@ -51,5 +51,57 @@ describe("código del sitio", () => {
         expect(match[1], path).not.toMatch(/https?:/);
       }
     }
+  });
+});
+
+describe("index.html (sitio estático, sin cabeceras propias)", () => {
+  const html = readFileSync(join(__dirname, "..", "index.html"), "utf-8");
+
+  it("trae una CSP de respaldo sin unsafe-inline ni unsafe-eval", () => {
+    const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1];
+    expect(csp).toBeTruthy();
+    expect(csp).not.toMatch(/unsafe-inline|unsafe-eval/);
+    expect(csp).toMatch(/default-src 'self'/);
+  });
+
+  it("no tiene scripts inline: solo <script src=...> (CSP script-src 'self' los bloquearía)", () => {
+    for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+      const [, attrs, body] = match;
+      expect(attrs, body).toMatch(/\bsrc=/);
+      expect(body.trim(), attrs).toBe("");
+    }
+  });
+});
+
+describe("anti-iframe.js (respaldo de frame-ancestors en GitHub Pages)", () => {
+  const script = readFileSync(join(__dirname, "..", "public", "anti-iframe.js"), "utf-8");
+
+  it("no usa eval ni document.write", () => {
+    expect(script).not.toMatch(/\beval\s*\(|document\.write/);
+  });
+
+  function run(topHref: { set: (v: string) => void } | null, sameWindow: boolean) {
+    const selfLocation = { href: "https://site.example/page" };
+    const win: Record<string, unknown> = { self: null, top: null };
+    win.self = win;
+    if (sameWindow) {
+      win.top = win;
+    } else {
+      const topLocation: Record<string, unknown> = {};
+      Object.defineProperty(topLocation, "href", { set: topHref!.set, get: () => "" });
+      win.top = { location: topLocation };
+    }
+    (win as { location: unknown }).location = selfLocation;
+    new Function("window", script)(win);
+  }
+
+  it("redirige la ventana superior cuando está embebido en un iframe", () => {
+    const set = vi.fn();
+    run({ set }, false);
+    expect(set).toHaveBeenCalledWith("https://site.example/page");
+  });
+
+  it("no hace nada cuando no está embebido (top === self)", () => {
+    expect(() => run(null, true)).not.toThrow();
   });
 });
