@@ -1,21 +1,28 @@
-"""El panel de Streamlit exige inicio de sesión y no muestra datos antes (puntos 1, 5)."""
+"""El panel de Streamlit: login, datos solo del propio negocio y nada se agenda solo (puntos 1, 5; P1.6)."""
 
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from app.services import calendar_service, leads, tenants
 from helpers import PASSWORD, make_tenant, make_user, reset_db
 
 PANEL = str(Path(__file__).resolve().parent.parent.parent / "frontend" / "app.py")
+LEAD = dict(name="Ana Sol", email="ana@sol.com", business="", topic="Book a demo", message="Mensaje de prueba largo", consent=True)
 
 
 @pytest.fixture
 def panel(client):
     reset_db()
-    make_user(make_tenant("demo"), "admin", "owner")
+    sol = make_tenant("demo", "Clínica Sol")
+    luna = make_tenant("luna", "Salón Luna")
+    make_user(sol, "admin", "owner")
+    leads.create_lead(sol, leads.LeadIn(**LEAD))
+    leads.create_lead(luna, leads.LeadIn(**{**LEAD, "name": "Beto Luna", "email": "beto@luna.com"}))
     return AppTest.from_file(PANEL, default_timeout=30).run()
 
 
@@ -25,9 +32,13 @@ def _login(panel, password):
     return panel.button[0].click().run()
 
 
+def _button(panel, label):
+    return next(b for b in panel.button if b.label == label)
+
+
 def test_panel_hides_everything_before_login(panel):
     assert not panel.exception
-    assert len(panel.metric) == 0 and len(panel.chat_input) == 0
+    assert len(panel.metric) == 0 and len(panel.chat_input) == 0 and len(panel.dataframe) == 0
 
 
 def test_panel_rejects_wrong_password(panel):
@@ -35,21 +46,57 @@ def test_panel_rejects_wrong_password(panel):
     assert panel.error[0].value == "Credenciales inválidas." and len(panel.metric) == 0
 
 
-def test_panel_login_then_chat_renders_as_plain_text(panel):
+def test_panel_shows_real_metrics_and_only_own_leads(panel):
     panel = _login(panel, PASSWORD)
     assert not panel.exception and len(panel.metric) == 4
-    assert panel.info[0].value.startswith("Google Calendar está desactivado")
+    assert panel.metric[0].value == "1"
+    table = panel.dataframe[0].value
+    assert list(table["Correo"]) == ["ana@sol.com"]
+    assert "Clínica Sol" in panel.title[0].value
 
+
+def test_panel_chat_renders_as_plain_text(panel):
+    panel = _login(panel, PASSWORD)
+    assert panel.info[0].value.startswith("Google Calendar está desactivado")
     panel.chat_input[0].set_value("<img src=x onerror=alert(1)> **hola**").run()
     assert not panel.exception
     assert any("<img src=x onerror=alert(1)> **hola**" in t.value for t in panel.text)
     assert not any("onerror" in m.value for m in panel.markdown)
 
 
-def test_panel_appointment_reports_disabled_calendar(panel):
+def test_chat_never_books_on_its_own(panel, monkeypatch):
+    """Antes, escribir "cita" creaba un evento para mañana a las 11:00 sin confirmación."""
+    spy = MagicMock()
+    monkeypatch.setattr(calendar_service, "create_appointment", spy)
     panel = _login(panel, PASSWORD)
-    panel.chat_input[0].set_value("Quiero agendar una cita").run()
-    assert any("No se pudo registrar" in t.value for t in panel.text)
+    panel.chat_input[0].set_value("Quiero agendar una cita mañana").run()
+    assert not panel.exception
+    spy.assert_not_called()
+    assert not any("agendada" in t.value.lower() for t in panel.text)
+
+
+def test_booking_form_requires_confirmation(panel, monkeypatch):
+    spy = MagicMock(return_value={"status": "disabled", "message": "La agenda de Google Calendar no está activada."})
+    monkeypatch.setattr(calendar_service, "create_appointment", spy)
+    panel = _login(panel, PASSWORD)
+    panel.text_input[0].set_value("Ana Sol")
+    panel.text_input[1].set_value("Limpieza")
+    panel = _button(panel, "Agendar cita").click().run()
+    assert any("confirmación" in e.value for e in panel.error)
+    spy.assert_not_called()
+
+    panel.checkbox[0].check()
+    panel = _button(panel, "Agendar cita").click().run()
+    spy.assert_called_once()
+    assert spy.call_args.kwargs["timezone"] == "America/Toronto"
+    assert spy.call_args.kwargs["summary"] == "Limpieza - Ana Sol"
+
+
+def test_panel_closes_when_business_is_deactivated(panel):
+    panel = _login(panel, PASSWORD)
+    tenants.set_active("demo", False)
+    panel = panel.run()
+    assert len(panel.metric) == 0 and len(panel.dataframe) == 0
 
 
 def test_panel_session_expires(panel):
