@@ -13,6 +13,37 @@ from app.core.db import get_connection
 from app.core.logs import configure_logging, security_event
 from app.core.middleware import SecurityMiddleware
 from app.core.ratelimit import limiter, rate_limit_handler
+from app.services import tenants
+
+
+def _ensure_demo_tenant(settings) -> None:
+    """Para la demo pública (GitHub Pages + Render): recrea el negocio del sitio si el disco es
+    efímero y se perdió entre reinicios. Apagado por defecto; solo actúa si SEED_DEMO_TENANT
+    tiene un slug válido, y nunca pisa un negocio que ya existe."""
+    slug = settings.seed_demo_tenant
+    if not slug or not tenants.is_valid_slug(slug):
+        return
+    try:
+        if tenants.get_by_slug(slug) is not None:
+            return
+        tenants.create_tenant(
+            slug,
+            tenants.TenantProfile(
+                name="Operativa.ia",
+                business_type="AI implementation for small businesses",
+                services=(
+                    "Business discovery, a custom AI assistant, tool integrations, "
+                    "process automation, team training and ongoing support."
+                ),
+                hours="By appointment, Monday to Friday.",
+                location="Waterloo, ON, Canada",
+            ),
+        )
+        security_event("demo_tenant_seeded", tenant=slug)
+    except Exception as exc:
+        # Un fallo aquí no debe tumbar el servidor: solo significa que el chat/contacto de la
+        # demo responderá "no encontrado" hasta el siguiente reinicio o una creación manual.
+        security_event("demo_tenant_seed_failed", "ERROR", error=type(exc).__name__)
 
 
 async def _validation_handler(request: Request, exc: RequestValidationError):
@@ -25,6 +56,7 @@ async def _validation_handler(request: Request, exc: RequestValidationError):
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging()
+    _ensure_demo_tenant(settings)
 
     # Inicialización de la aplicación FastAPI
     docs_enabled = settings.env == "development"

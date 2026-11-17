@@ -66,6 +66,7 @@ class Settings:
     smtp_password: str
     smtp_from: str
     campaign_max_recipients: int
+    seed_demo_tenant: str
 
     @property
     def is_production(self) -> bool:
@@ -202,4 +203,5 @@ def get_settings() -> Settings:
         smtp_password=smtp["SMTP_PASSWORD"],
         smtp_from=smtp["SMTP_FROM"],
         campaign_max_recipients=_positive_int("CAMPAIGN_MAX_RECIPIENTS", "500"),
+        seed_demo_tenant=os.getenv("SEED_DEMO_TENANT", "").strip(),
     )
