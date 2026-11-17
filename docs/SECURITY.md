@@ -91,6 +91,29 @@ Trata como comprometidos el cliente OAuth de Google y su token compartidos antes
 4. **Limpiar Git si hubo una fuga:** usa `git filter-repo` o BFG solo con una decisión explícita, porque reescribe el historial. Rota las llaves de todos modos.
 5. **Cerrar:** añade una prueba que reproduzca el problema y anótalo en `SECURITY_REPORT.md`.
 
+## Demo pública de portafolio (GitHub Pages + Render)
+
+Para mostrar el producto funcionando sin un servidor propio, el sitio se puede publicar por separado
+de la API, con un modelo de confianza distinto al de `deploy/Caddyfile`:
+
+- **Sitio:** GitHub Pages (`gh-pages`, workflow `pages.yml`). Solo sirve archivos estáticos; GitHub no
+  deja fijar cabeceras HTTP propias.
+- **API:** Render, plan gratuito (`render.yaml`), en un dominio distinto al del sitio.
+- **CORS:** `ALLOWED_ORIGINS` en Render debe ser exactamente `https://hsoja.github.io` (el origen del
+  sitio, no la ruta completa).
+- **CSP sin cabecera:** como GitHub Pages no envía cabeceras, el sitio lleva una CSP de respaldo por
+  `<meta>` en `index.html` (misma política que `vite.config.ts`/Caddy, con `connect-src` ampliado a
+  `https://*.onrender.com` para poder llamar a una API en otro dominio). Una CSP por `<meta>` no
+  cubre `frame-ancestors`; `public/anti-iframe.js` saca al sitio de cualquier iframe ajeno como
+  respaldo manual de esa única directiva (mismo patrón ya usado y auditado en el repo `Portfolio`).
+- **Datos efímeros a propósito:** el disco de Render es temporal; el negocio de demo (`operativa`) se
+  vuelve a crear solo al arrancar si `SEED_DEMO_TENANT` está configurado (ver `render.yaml`), así que
+  nunca hay datos reales de clientes en riesgo de perderse — es justamente lo que se espera de una demo.
+- **Sin pagos ni mensajería reales:** Stripe, WhatsApp y SMTP se dejan apagados en esta demo (fail-closed
+  por diseño): sin esas llaves, esas rutas simplemente no se activan.
+- **Riesgo aceptado:** sin `frame-ancestors` por cabecera y sin HSTS en el sitio (GitHub Pages sí sirve
+  todo por HTTPS, pero no añade esa cabecera). Nivel de riesgo igual al ya aceptado para `Portfolio`.
+
 ## Pendiente para versiones futuras
 
 - **Recuperación de contraseña por web:** enlace de un solo uso, aleatorio, guardado como hash, con 15 minutos de validez, respuesta genérica y límite de peticiones. Requiere un sistema de correo.
