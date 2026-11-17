@@ -5,6 +5,7 @@ Groq (Llama 3) con un prompt construido por negocio. El texto del cliente va sie
 """
 
 import json
+import re
 from datetime import date
 from typing import Annotated
 
@@ -69,6 +70,26 @@ SLOTS_TOOL = {
 TOOL_SPECS = {"check_coverage": COVERAGE_TOOL, "list_available_slots": SLOTS_TOOL}
 ALLOWED_TOOLS = set(TOOL_SPECS)
 MAX_SLOTS_SHOWN = 8
+
+# Guardia de salida (R1): si el modelo habla de coberturas SIN haber usado la herramienta, su texto
+# se reemplaza por la respuesta fija de la regla. Así ningún texto libre puede afirmar una cobertura.
+COVERAGE_TOPIC = re.compile(
+    r"\b(cubr\w*|cobertura\w*|asegurador\w*|p[oó]liza\w*|seguros?\s+(m[eé]dic|dental)\w*|"
+    r"(tu|su|sus|tus)\s+seguros?|aceptamos\s+(tu|su|el)\s+(seguro|plan)|plan(es)?\s+de\s+seguro\w*|"
+    r"insur\w*|cover(ed|age|s)?|zona\s+de\s+(servicio|cobertura)|[aá]rea\s+de\s+servicio)\b",
+    re.IGNORECASE,
+)
+def _mentions_coverage(tenant_id: int, text: str) -> bool:
+    """Habla de coberturas: palabras clave o el nombre de una aseguradora/ciudad configurada por el negocio."""
+    if COVERAGE_TOPIC.search(text):
+        return True
+    words = lambda value: " " + " ".join(re.sub(r"[^a-z0-9]+", " ", coverage.normalize_name(value)).split()) + " "
+    plain = words(text)
+    rules = coverage.get_rules(tenant_id)
+    return any(words(label) in plain for label in rules["insurers"] + rules["cities"])
+
+
+COVERAGE_FALLBACK_NO_RULES = "Sobre zona de servicio o aseguradoras, el equipo del negocio te confirmará los detalles."
 
 
 class SlotsQuery(StrictModel):
@@ -251,6 +272,14 @@ def process_message(
         agent_response, blocked = llm_guard.filter_reply(content, f"{RULES}\n{TOOL_RULES}\n{SLOT_RULES}")
         if blocked:
             security_event("llm_output_blocked", "WARNING", reason=blocked, client=client_hash, tenant=tenant["slug"])
+        elif not tool_calls and _mentions_coverage(tenant_id, agent_response):
+            # R1: texto libre sobre coberturas sin pasar por la regla -> respuesta fija
+            security_event("llm_output_blocked", "WARNING", reason="coverage_claim", client=client_hash, tenant=tenant["slug"])
+            agent_response = (
+                coverage.describe(coverage.check(tenant_id, coverage.CoverageQuery()))
+                if "check_coverage" in names
+                else COVERAGE_FALLBACK_NO_RULES
+            )
 
         conversations.add_message(tenant_id, conversation_id, "assistant", agent_response)
         return result("success", agent_response)

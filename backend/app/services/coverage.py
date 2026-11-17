@@ -136,25 +136,45 @@ def check(tenant_id: int, query: CoverageQuery) -> dict:
     else:
         insurance = "covered" if normalize_name(query.insurer) in insurers else "not_covered"
 
-    results = (area, insurance)
-    qualifies = None if "missing" in results else "not_covered" not in results
+    # Solo cuentan las dimensiones que el negocio configuró: lo no configurado nunca se afirma
+    configured = [r for r in (area, insurance) if r != "not_applicable"]
+    if not configured or "missing" in configured:
+        qualifies = None
+    else:
+        qualifies = "not_covered" not in configured
     return {"area": area, "insurance": insurance, "qualifies": qualifies}
 
 
+NO_RULES_MESSAGE = "Este negocio no publicó reglas de zona ni de aseguradoras. El equipo te lo confirmará."
+UNPUBLISHED = {
+    "area": " El negocio no publicó su zona de servicio; el equipo te la confirmará.",
+    "insurance": " El negocio no publicó una lista de aseguradoras; el equipo te lo confirmará.",
+}
+
+
 def describe(result: dict) -> str:
-    """Texto fijo para el cliente según el resultado (el LLM puede reformularlo, no cambiarlo)."""
+    """Texto FIJO para el cliente según el resultado. Nunca afirma lo que el negocio no configuró."""
+    area, insurance = result["area"], result["insurance"]
+    if area == "not_applicable" and insurance == "not_applicable":
+        return NO_RULES_MESSAGE
+    note = "".join(UNPUBLISHED[key] for key, value in (("area", area), ("insurance", insurance)) if value == "not_applicable")
     if result["qualifies"] is True:
-        return "Sí: el negocio atiende tu zona y acepta tu plan (según lo que indicaste)."
+        parts = []
+        if area == "covered":
+            parts.append("atiende tu zona")
+        if insurance == "covered":
+            parts.append("acepta tu aseguradora o plan")
+        return "Sí: el negocio " + " y ".join(parts) + " (según lo que indicaste)." + note
     if result["qualifies"] is False:
         reasons = []
-        if result["area"] == "not_covered":
+        if area == "not_covered":
             reasons.append("tu zona no está dentro del área de servicio")
-        if result["insurance"] == "not_covered":
+        if insurance == "not_covered":
             reasons.append("tu aseguradora o plan no está en la lista aceptada")
         return "Por ahora no: " + " y ".join(reasons) + ". El equipo puede confirmarlo contigo."
     missing = []
-    if result["area"] == "missing":
+    if area == "missing":
         missing.append("tu código postal o ciudad")
-    if result["insurance"] == "missing":
+    if insurance == "missing":
         missing.append("el nombre de tu aseguradora o plan")
     return "Para confirmarlo necesito " + " y ".join(missing) + "."

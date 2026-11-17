@@ -12,7 +12,7 @@ No quedan hallazgos altos abiertos ni secretos expuestos, y todas las pruebas pa
 
 | Comprobación | Resultado |
 |---|---|
-| `pytest` (backend) | ✅ 464 correctas |
+| `pytest` (backend) | ✅ 481 correctas (3 omitidas a propósito: límite documentado de R1) |
 | `vitest` (frontend) | ✅ 82 correctas |
 | `pip-audit -r requirements.lock` | ✅ Sin vulnerabilidades conocidas |
 | `npm audit --audit-level=high` | ✅ 0 vulnerabilidades |
@@ -55,21 +55,22 @@ Sin sesión, rol equivocado (matriz por rol), otro negocio (IDOR por id, por tok
 | H25 | Baja | Un cliente de WhatsApp abría una conversación nueva con cada mensaje | `services/conversations.py` | Token del servidor reutilizado; el del navegador nunca se adopta (`b3cf828`) | Corregido |
 | H26 | Baja | Una plantilla con horarios solapados tumbaba el CLI con un error sin capturar | `services/templates.py` | `TemplateError` controlado (`451a9a4`) | Corregido |
 | H27 | Baja | Contraste del texto tenue de 4,05:1, por debajo de WCAG AA | `frontend/src/index.css` | 5:1 o más (`ec13d0f`) | Corregido |
+| H28 | Media | Al verificar R1: la ruta `/coverage` afirmaba "acepta tu plan" en negocios sin reglas o sin lista de aseguradoras, y Sofía podía afirmar coberturas en texto libre sin usar la herramienta | `services/coverage.py`, `services/agent.py` | Solo se afirman las dimensiones configuradas; guardia de salida que reemplaza por la respuesta fija cualquier texto libre que hable de coberturas o nombre una aseguradora o ciudad configurada | Corregido |
 | H16 | Media | `login_attempts` crecía sin límite | `services/auth.py` | Limpieza tras 24 h sin fallos (`604ecf6`) | Corregido |
 
 ### Riesgos residuales (medios y bajos, documentados)
 
 | ID | Severidad | Riesgo | Mitigación actual | Estado |
 |---|---|---|---|---|
-| R1 | Media | Si el modelo responde sin llamar `check_coverage`, podría sugerir una cobertura | Regla 8 del prompt; la ruta `/coverage` y la herramienta dan una respuesta fija según la regla | Aceptado (pendiente de tu OK) |
-| R2 | Media | Los límites de peticiones viven en memoria: con varios procesos cada uno cuenta por separado | Un solo proceso por ahora; `RATE_LIMIT_STORAGE=redis://` soportado, sin probar | Abierto |
-| R3 | Media | Sin MFA para owner y admin | Argon2id, bloqueo progresivo, sesiones cortas | Abierto |
-| R4 | Media | El aislamiento entre negocios es solo en la aplicación (SQLite no tiene RLS) | `tenant_id` en cada consulta, probado con dos negocios | Abierto: PostgreSQL con RLS |
-| R5 | Media | Términos y Política de Privacidad sin revisión legal (PIPEDA, CASL) | Marcados como borrador | Abierto (externo) |
-| R6 | Baja | Las tareas en segundo plano (respuesta de WhatsApp, correos) se pierden si el proceso cae | Idempotencia evita duplicados al reintentar | Abierto: cola persistente |
-| R7 | Baja | La referencia de la reserva y el token de baja viajan en URLs (historial, logs de acceso) | Solo permiten ver el estado sin datos personales o darse de baja; `Referrer-Policy: no-referrer` | Aceptado |
-| R8 | Baja | Los pagos que no cuadran quedan en "revisar reembolso" y se reembolsan a mano | Visibles en el panel; nunca se confirman | Aceptado |
-| R9 | Baja | El nombre del contacto se inserta en el cuerpo del correo | Texto plano, limpiado, 80 caracteres como máximo | Aceptado |
+| R1 | Baja (era Media) | Tras H28, solo queda un caso: en un negocio **sin reglas configuradas**, una frase que afirme cobertura sin palabras clave ni nombres conocidos (p. ej. "trabajamos con esa compañía") | Ruta `/coverage` y herramienta con texto fijo; guardia por palabras clave y por nombres configurados; regla 8 del prompt | Pendiente de decisión de la dueña |
+| R2 | Media | Los límites de peticiones viven en memoria: con varios procesos cada uno cuenta por separado | Un solo proceso por ahora; `RATE_LIMIT_STORAGE=redis://` soportado, sin probar | Aceptado (16 nov 2026) |
+| R3 | Media | Sin MFA para owner y admin | Argon2id, bloqueo progresivo, sesiones cortas | ⛔ **Bloqueante antes del primer cliente real.** Aceptado solo mientras no haya clientes. Revisión: 1 dic 2026 |
+| R4 | Media | El aislamiento entre negocios es solo en la aplicación (SQLite no tiene RLS) | `tenant_id` en cada consulta, probado con dos negocios | Aceptado (16 nov 2026); RLS al migrar a PostgreSQL |
+| R5 | Media | Términos y Política de Privacidad sin revisión legal (PIPEDA, CASL) | Marcados como borrador | ⛔ **Bloqueante antes del primer cliente real.** Aceptado solo mientras no haya clientes. Revisión: 1 dic 2026 |
+| R6 | Baja | Las tareas en segundo plano (respuesta de WhatsApp, correos) se pierden si el proceso cae | Idempotencia evita duplicados al reintentar | Aceptado (16 nov 2026) |
+| R7 | Baja | La referencia de la reserva y el token de baja viajan en URLs (historial, logs de acceso) | Solo permiten ver el estado sin datos personales o darse de baja; `Referrer-Policy: no-referrer` | Aceptado (16 nov 2026) |
+| R8 | Baja | Los pagos que no cuadran quedan en "revisar reembolso" y se reembolsan a mano | Visibles en el panel; nunca se confirman | Aceptado (16 nov 2026) |
+| R9 | Baja | El nombre del contacto se inserta en el cuerpo del correo | Texto plano, limpiado, 80 caracteres como máximo | Aceptado (16 nov 2026) |
 | H17 | Baja | El tope de tokens puede superarse por una respuesta | Máximo 500 tokens de salida | Aceptado |
 
 ### No verificado
@@ -84,8 +85,9 @@ Sin sesión, rol equivocado (matriz por rol), otro negocio (IDOR por id, por tok
 - [ ] Ejecutar el CI en GitHub (PR) y agregar el check `frontend` al ruleset `protect-main`.
 - [ ] Probar Stripe, WhatsApp y SMTP con llaves de prueba en un staging.
 - [ ] OWASP ZAP sobre staging sin hallazgos altos.
-- [ ] Revisión legal de Términos y Privacidad.
-- [ ] MFA para owner y admin; PostgreSQL con RLS si hay más de un servidor.
+- [ ] ⛔ R5: revisión legal de Términos y Privacidad (revisión 1 dic 2026).
+- [ ] ⛔ R3: MFA para owner y admin (revisión 1 dic 2026).
+- [ ] PostgreSQL con RLS si hay más de un servidor (R4).
 - [ ] Pentest externo antes del primer cliente real.
 
 ---
