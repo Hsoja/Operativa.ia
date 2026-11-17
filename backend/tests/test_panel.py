@@ -110,3 +110,30 @@ def test_panel_imports_backend_when_run_as_a_script():
     """Sin el pythonpath de pytest, frontend/app.py no debe taparse a sí mismo el paquete `app`."""
     result = subprocess.run([sys.executable, PANEL], capture_output=True, text=True, cwd=Path(PANEL).parent.parent)
     assert result.returncode == 0, result.stderr[-500:]
+
+
+def _form_button(panel, label):
+    return next(b for b in panel.button if b.label == label)
+
+
+def test_panel_coverage_rules_and_quick_check(panel):
+    panel = _login(panel, PASSWORD)
+    areas = [t for t in panel.text_area if t.label.startswith("Prefijos")][0]
+    insurers = [t for t in panel.text_area if t.label.startswith("Aseguradoras")][0]
+    areas.set_value("N2L\nN2J")
+    insurers.set_value("Sun Life")
+    panel = _form_button(panel, "Guardar cobertura").click().run()
+    assert any("Cobertura guardada" in s.value for s in panel.success)
+    postal = [t for t in panel.text_input if t.label == "Código postal"][0]
+    postal.set_value("N2L 3G1")
+    [t for t in panel.text_input if t.label == "Aseguradora o plan"][0].set_value("Otra")
+    panel = _form_button(panel, "Comprobar").click().run()
+    assert any("aseguradora" in i.value for i in panel.info)
+
+
+def test_staff_sees_coverage_read_only(client):
+    reset_db()
+    make_user(make_tenant("demo"), "admin", "staff")
+    panel = _login(AppTest.from_file(PANEL, default_timeout=30).run(), PASSWORD)
+    assert all(t.disabled for t in panel.text_area if t.label.startswith(("Prefijos", "Ciudades", "Aseguradoras")))
+    assert _form_button(panel, "Guardar cobertura").disabled

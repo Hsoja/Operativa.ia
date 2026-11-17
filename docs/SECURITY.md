@@ -15,6 +15,7 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 | Permisos dentro de un negocio | Escalada de privilegios (staff que actúa como owner) | `require_roles` en cada ruta, matriz de roles probada, owners solo por CLI |
 | Formulario y chat públicos | Spam, abuso de costo, datos personales sin consentimiento | Límites por IP, topes de tokens por negocio, trampa anti-bots, consentimiento obligatorio, retención de conversaciones |
 | Webhook de WhatsApp | Mensajes falsos, repetidos o viejos; respuesta desde otro negocio; SSRF por `phone_number_id` | Firma `X-Hub-Signature-256` en tiempo constante, idempotencia por id, antigüedad máxima, negocio por número registrado, ids solo numéricos, sin redirecciones, apagado sin llaves |
+| Calificación de coberturas | Que el LLM afirme una cobertura que no existe; herramientas no permitidas; pedir datos de salud | Resultado determinista con texto fijo, una sola herramienta de solo lectura en lista blanca, argumentos validados, sin campos de póliza ni salud, consultas no guardadas |
 | Historial del chat | Turnos de la asistente inventados por el cliente | El historial vive en el servidor; el navegador solo tiene un identificador aleatorio guardado como hash |
 
 **Límites de confianza:** navegador → proxy → API o panel → Groq y Google. Entre negocios también hay un límite: el slug público identifica al negocio, pero nunca da acceso a sus datos. Todo lo que envía el navegador, responde el modelo o devuelve un proveedor se trata como no confiable.
@@ -28,6 +29,7 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 - **Autenticación:** `backend/app/services/auth.py`, `backend/app/api/admin.py`, `backend/app/api/deps.py` y `backend/app/cli.py`.
 - **Multi-tenant y roles:** `backend/app/services/tenants.py`, `backend/app/api/deps.py` (`require_roles`, `public_tenant`). Matriz: staff ve; admin además edita el perfil y borra leads; owner además crea personal. Negocios y owners se crean solo por CLI.
 - **WhatsApp:** `backend/app/services/whatsapp.py`, `channels.py` y `backend/app/api/webhooks.py`. El número del cliente no se guarda: la conversación se identifica con un HMAC del número (clave: App Secret). Rotar el App Secret inicia conversaciones nuevas.
+- **Coberturas:** `backend/app/services/coverage.py`. Sofía solo puede pedir `check_coverage`; cualquier otra herramienta o argumento inválido se rechaza y se registra. Riesgo residual: si el modelo responde sin llamar la herramienta, podría sugerir una cobertura; la regla 8 del prompt lo prohíbe y la ruta `/coverage` da la respuesta oficial.
 - **Datos personales:** `backend/app/services/leads.py` y `conversations.py`. Retención con `python -m app.cli purge` (`CONVERSATION_RETENTION_DAYS`); se recomienda ejecutarlo a diario con cron.
 - **LLM:** `backend/app/services/llm_guard.py` y `backend/app/services/agent.py`.
 - **Calendar:** `backend/app/services/calendar_service.py`.

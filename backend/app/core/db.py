@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from app.core.config import get_settings
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tenants (
@@ -99,6 +99,21 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     received_at INTEGER NOT NULL,
     PRIMARY KEY (provider, event_id)
 );
+CREATE TABLE IF NOT EXISTS coverage_areas (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('postal_prefix', 'city')),
+    value TEXT NOT NULL,
+    label TEXT NOT NULL,
+    UNIQUE (tenant_id, kind, value)
+);
+CREATE TABLE IF NOT EXISTS coverage_insurers (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    value TEXT NOT NULL,
+    label TEXT NOT NULL,
+    UNIQUE (tenant_id, value)
+);
 """
 
 LEGACY_TABLE_QUERY = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'admin_users'"
@@ -118,11 +133,11 @@ def _initialize(connection: sqlite3.Connection) -> None:
             "La base de datos es de la versión sin multi-tenant. Respáldala, bórrala y crea "
             "los negocios y usuarios de nuevo con `python -m app.cli` (ver README)."
         )
-    if version not in (0, 2):
+    if version not in (0, 2, 3):
         raise SchemaVersionError("Versión de base de datos desconocida.")
-    # v2 -> v3 solo agrega tablas (CREATE ... IF NOT EXISTS), así que el mismo script sirve de migración
+    # v2 -> v3 -> v4 solo agregan tablas (CREATE ... IF NOT EXISTS): el mismo script sirve de migración
     connection.executescript(SCHEMA)
-    connection.execute("PRAGMA user_version = 3")
+    connection.execute("PRAGMA user_version = 4")
 
 
 @contextmanager

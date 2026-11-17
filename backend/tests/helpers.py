@@ -8,7 +8,7 @@ ORIGIN = {"Origin": "http://localhost:8501"}
 PROD = {"ENV": "production", "ALLOWED_ORIGINS": "https://app.example.com", "IP_HASH_SALT": "s" * 32}
 TABLES = (
     "messages", "conversations", "leads", "llm_usage", "sessions", "login_attempts",
-    "tenant_channels", "webhook_events", "users", "tenants",
+    "tenant_channels", "webhook_events", "coverage_areas", "coverage_insurers", "users", "tenants",
 )
 
 

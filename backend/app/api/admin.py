@@ -1,8 +1,8 @@
 """Rutas del panel de cada negocio - Operativa.ia
 
 Matriz de permisos (el tenant siempre sale de la sesión):
-    staff  -> ver perfil, leads y conversaciones
-    admin  -> lo anterior + editar el perfil, ver el prompt y el equipo, borrar leads
+    staff  -> ver perfil, cobertura, leads y conversaciones
+    admin  -> lo anterior + editar perfil y cobertura, ver el prompt y el equipo, borrar leads
     owner  -> lo anterior + crear usuarios admin/staff de su negocio
 Crear negocios y owners solo se puede por CLI en el servidor: no hay "superadmin" web.
 """
@@ -19,7 +19,7 @@ from app.core.config import get_settings
 from app.core.logs import hash_identifier, security_event
 from app.core.ratelimit import admin_rate, client_ip, ip_session_key, limiter, login_rate
 from app.core.validation import StrictModel
-from app.services import agent, auth, conversations, leads, tenants
+from app.services import agent, auth, conversations, coverage, leads, tenants
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Panel"])
 
@@ -120,7 +120,23 @@ def update_tenant(request: Request, payload: tenants.TenantProfile, session: dic
 @limiter.limit(admin_rate, key_func=ip_session_key)
 def read_agent_prompt(request: Request, session: dict = Depends(require_roles(*MANAGERS))):
     """Prompt que usa Sofía para este negocio (solo owner y admin)."""
-    return {"system_prompt": agent.build_system_prompt(tenants.get(session["tenant_id"]))}
+    tenant_id = session["tenant_id"]
+    return {"system_prompt": agent.build_system_prompt(tenants.get(tenant_id), coverage.has_rules(tenant_id))}
+
+
+@router.get("/coverage")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def read_coverage(request: Request, session: dict = Depends(require_roles(*ALL_ROLES))):
+    return coverage.get_rules(session["tenant_id"])
+
+
+@router.post("/coverage")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def update_coverage(request: Request, payload: coverage.CoverageRules, session: dict = Depends(require_roles_csrf(*MANAGERS))):
+    """Reemplaza las reglas de zona y aseguradoras del negocio (owner y admin)."""
+    coverage.set_rules(session["tenant_id"], payload)
+    security_event("coverage_updated", tenant=session["tenant_slug"], user=hash_identifier(session["username"].lower()))
+    return coverage.get_rules(session["tenant_id"])
 
 
 @router.get("/users")

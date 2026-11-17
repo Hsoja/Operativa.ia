@@ -23,7 +23,9 @@ if str(backend_path) not in sys.path:
 
 from app.core.config import get_settings
 from app.core.logs import configure_logging, hash_identifier, security_event
-from app.services import agent, auth, conversations, leads, metrics, tenants
+from pydantic import ValidationError
+
+from app.services import agent, auth, conversations, coverage, leads, metrics, tenants
 from app.services.calendar_service import (
     CalendarDisabledError,
     create_appointment,
@@ -88,8 +90,8 @@ def main() -> None:
     col4.metric("Mensajes de clientes (7 días)", summary["messages_week"])
 
     st.divider()
-    tab_agenda, tab_leads, tab_conversations, tab_sofia = st.tabs(
-        ["📅 Agenda", "📥 Leads", "💬 Conversaciones", "🤖 Probar a Sofía"]
+    tab_agenda, tab_leads, tab_conversations, tab_coverage, tab_sofia = st.tabs(
+        ["📅 Agenda", "📥 Leads", "💬 Conversaciones", "🗺️ Cobertura", "🤖 Probar a Sofía"]
     )
 
     # --- Agenda -------------------------------------------------------------------------------------
@@ -186,6 +188,44 @@ def main() -> None:
                     st.text(message["content"])
         else:
             st.info("Todavía no hay conversaciones.")
+
+    # --- Cobertura ---------------------------------------------------------------------------------
+    with tab_coverage:
+        rules = coverage.get_rules(tenant["id"])
+        st.subheader("Zona de servicio y aseguradoras")
+        st.caption("Una lista vacía significa que esa condición no se revisa. Nunca pidas números de póliza ni datos de salud.")
+        can_edit = user["role"] in ("owner", "admin")
+        with st.form("coverage_rules"):
+            prefixes = st.text_area("Prefijos de código postal (uno por línea, p. ej. N2L)", "\n".join(rules["postal_prefixes"]), disabled=not can_edit)
+            cities = st.text_area("Ciudades (una por línea)", "\n".join(rules["cities"]), disabled=not can_edit)
+            insurers = st.text_area("Aseguradoras o planes aceptados (uno por línea)", "\n".join(rules["insurers"]), disabled=not can_edit)
+            save = st.form_submit_button("Guardar cobertura", disabled=not can_edit)
+        if save and can_edit:
+            lines = lambda text: [line.strip() for line in text.splitlines() if line.strip()]
+            try:
+                coverage.set_rules(
+                    tenant["id"],
+                    coverage.CoverageRules(postal_prefixes=lines(prefixes), cities=lines(cities), insurers=lines(insurers)),
+                )
+                security_event("coverage_updated", tenant=tenant["slug"], user=hash_identifier(user["username"].lower()))
+                st.success("Cobertura guardada.")
+            except ValidationError:
+                st.error("Revisa las listas: hay valores vacíos, demasiado largos o con caracteres no válidos.")
+
+        st.subheader("Consulta rápida")
+        with st.form("coverage_check"):
+            q_postal = st.text_input("Código postal", max_chars=12)
+            q_city = st.text_input("Ciudad", max_chars=80)
+            q_insurer = st.text_input("Aseguradora o plan", max_chars=80)
+            run_check = st.form_submit_button("Comprobar")
+        if run_check:
+            try:
+                query = coverage.CoverageQuery(
+                    postal_code=q_postal.strip() or None, city=q_city.strip() or None, insurer=q_insurer.strip() or None
+                )
+                st.info(coverage.describe(coverage.check(tenant["id"], query)))
+            except ValidationError:
+                st.error("Datos de consulta no válidos.")
 
     # --- Probar a Sofía --------------------------------------------------------------------------------
     with tab_sofia:

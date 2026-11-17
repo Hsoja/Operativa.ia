@@ -14,7 +14,7 @@ from app.api.deps import public_tenant
 from app.core.logs import security_event
 from app.core.ratelimit import chat_rate, client_ip, contact_rate, limiter
 from app.core.validation import CleanStr, StrictModel
-from app.services import agent, leads, tenants
+from app.services import agent, coverage, leads, tenants
 
 router = APIRouter(prefix="/api/v1/public/{slug}", tags=["Público"])
 
@@ -39,6 +39,15 @@ def read_profile(request: Request, tenant: dict = Depends(public_tenant)):
 def chat_with_agent(request: Request, payload: ChatRequest, tenant: dict = Depends(public_tenant)):
     """Mensaje de un cliente del negocio; la respuesta trae el identificador de la conversación."""
     return agent.process_message(tenant, payload.message, payload.conversation_id, client_ip(request))
+
+
+@router.post("/coverage")
+@limiter.limit(chat_rate)
+def check_coverage(request: Request, payload: coverage.CoverageQuery, tenant: dict = Depends(public_tenant)):
+    """¿El negocio atiende mi zona y acepta mi aseguradora? Resultado determinista; no se guarda la consulta."""
+    result = coverage.check(tenant["id"], payload)
+    security_event("coverage_checked", tenant=tenant["slug"], via="api", area=result["area"], insurance=result["insurance"])
+    return {**result, "message": coverage.describe(result)}
 
 
 @router.post("/contact", status_code=201)

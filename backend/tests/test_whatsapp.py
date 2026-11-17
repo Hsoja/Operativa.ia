@@ -285,7 +285,7 @@ def test_cli_link_whatsapp(wa):
     assert cli.main(["link-whatsapp", "--tenant", "nadie", "--phone-number-id", "123456"]) == 1
 
 
-def test_v2_database_is_migrated_to_v3(make_client, tmp_path):
+def test_v2_database_is_migrated_to_latest(make_client, tmp_path):
     from app.core import db as dbmod
 
     path = tmp_path / "v2.db"
@@ -294,6 +294,6 @@ def test_v2_database_is_migrated_to_v3(make_client, tmp_path):
         raw.execute("PRAGMA user_version = 2")
     make_client(DB_PATH=str(path))
     with get_connection() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("SELECT COUNT(*) FROM webhook_events").fetchone()[0] == 0
     get_settings.cache_clear()
