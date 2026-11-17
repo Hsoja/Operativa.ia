@@ -125,3 +125,17 @@ def test_upload_refuses_web_root():
 
     with pytest.raises(UploadRejected):
         save_upload(b"hola", "a.txt", "text/plain", WEB_ROOTS[0] / "static")
+
+
+def test_appointment_uses_business_timezone(client, monkeypatch):
+    service = _service_returning({"id": "1", "htmlLink": "https://calendar.google.com/e/1"})
+    monkeypatch.setattr(cal, "get_calendar_service", lambda: service)
+    cal.create_appointment("Cita", "Detalle", FUTURE, timezone="America/Vancouver")
+    body = service.events.return_value.insert.call_args.kwargs["body"]
+    assert body["start"]["timeZone"] == body["end"]["timeZone"] == "America/Vancouver"
+
+
+def test_unknown_timezone_rejected(client, monkeypatch, security_log):
+    monkeypatch.setattr(cal, "get_calendar_service", MagicMock(side_effect=AssertionError("no debe llegar")))
+    assert cal.create_appointment("Cita", "Detalle", FUTURE, timezone="Marte/Base")["status"] == "error"
+    assert security_log()[-1]["event"] == "tool_args_rejected"

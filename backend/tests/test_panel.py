@@ -7,19 +7,15 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.core.db import get_connection
-from app.services import auth
+from helpers import PASSWORD, make_tenant, make_user, reset_db
 
 PANEL = str(Path(__file__).resolve().parent.parent.parent / "frontend" / "app.py")
-PASSWORD = "-".join(["contrasena", "de", "prueba", "1"])
 
 
 @pytest.fixture
 def panel(client):
-    with get_connection() as db:
-        db.execute("DELETE FROM login_attempts")
-        db.execute("DELETE FROM admin_users")
-    auth.create_admin("admin", PASSWORD)
+    reset_db()
+    make_user(make_tenant("demo"), "admin", "owner")
     return AppTest.from_file(PANEL, default_timeout=30).run()
 
 
