@@ -4,7 +4,7 @@
 
 **Alcance:** todo el diff contra `main` (`20a794d`): multi-tenant y roles, chat y contacto por negocio, sitio conectado a la API, panel, Caddy, WhatsApp, coberturas, agenda con depósito (Stripe), reactivación por correo (CASL) y plantillas. 70+ archivos, unas 6 800 líneas añadidas.
 
-### Veredicto: 🟡 Aprobado con riesgos
+### Veredicto: 🟡 Aprobado con riesgos (aceptados por la dueña el 16 nov 2026)
 
 No quedan hallazgos altos abiertos ni secretos expuestos, y todas las pruebas pasan. Quedan riesgos medios y bajos documentados abajo, que la dueña del proyecto debe aceptar antes del merge. **No apto para clientes reales** hasta cerrar los pendientes de "Antes de producción".
 
@@ -62,7 +62,7 @@ Sin sesión, rol equivocado (matriz por rol), otro negocio (IDOR por id, por tok
 
 | ID | Severidad | Riesgo | Mitigación actual | Estado |
 |---|---|---|---|---|
-| R1 | Baja (era Media) | Tras H28, solo queda un caso: en un negocio **sin reglas configuradas**, una frase que afirme cobertura sin palabras clave ni nombres conocidos (p. ej. "trabajamos con esa compañía") | Ruta `/coverage` y herramienta con texto fijo; guardia por palabras clave y por nombres configurados; regla 8 del prompt | Pendiente de decisión de la dueña |
+| R1 | Baja (era Media) | Tras H28, solo queda un caso: en un negocio **sin reglas configuradas**, una frase que afirme cobertura sin palabras clave ni nombres conocidos (p. ej. "trabajamos con esa compañía") | Ruta `/coverage` y herramienta con texto fijo; guardia por palabras clave y por nombres configurados; regla 8 del prompt | Aceptado (16 nov 2026) |
 | R2 | Media | Los límites de peticiones viven en memoria: con varios procesos cada uno cuenta por separado | Un solo proceso por ahora; `RATE_LIMIT_STORAGE=redis://` soportado, sin probar | Aceptado (16 nov 2026) |
 | R3 | Media | Sin MFA para owner y admin | Argon2id, bloqueo progresivo, sesiones cortas | ⛔ **Bloqueante antes del primer cliente real.** Aceptado solo mientras no haya clientes. Revisión: 1 dic 2026 |
 | R4 | Media | El aislamiento entre negocios es solo en la aplicación (SQLite no tiene RLS) | `tenant_id` en cada consulta, probado con dos negocios | Aceptado (16 nov 2026); RLS al migrar a PostgreSQL |
