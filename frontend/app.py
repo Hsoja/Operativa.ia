@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.logs import configure_logging, hash_identifier, security_event
 from pydantic import ValidationError
 
-from app.services import agent, auth, booking, conversations, coverage, leads, metrics, reactivation, tenants
+from app.services import agent, auth, booking, conversations, coverage, leads, metrics, reactivation, templates, tenants
 from app.services.calendar_service import (
     CalendarDisabledError,
     create_appointment,
@@ -85,7 +85,9 @@ def main() -> None:
         return
 
     st.title(f"🤖 {tenant['name']} - Panel de Control")
-    st.caption(f"Usuario: {user['username']} · Rol: {user['role']} · Zona horaria: {tenant['timezone']}")
+    st.caption(
+        f"Usuario: {user['username']} · Rol: {user['role']} · Zona horaria: {tenant['timezone']} · Plantilla: {tenant['template']}"
+    )
     if st.button("Cerrar sesión"):
         _logout()
         st.rerun()
@@ -353,8 +355,11 @@ def main() -> None:
         if user["role"] in ("owner", "admin"):
             days = st.number_input("Clientes sin actividad desde hace (días)", min_value=30, max_value=730, value=90, step=15, key="react_days")
             st.text(f"Recibirían este correo: {reactivation.preview(tenant['id'], int(days))} contactos")
-            subject = st.text_input("Asunto", max_chars=120, key="react_subject")
-            body = st.text_area("Mensaje (usa {nombre} para personalizar)", max_chars=2000, key="react_body")
+            suggestion = templates.campaign_suggestion(tenant)
+            subject = st.text_input("Asunto", value=suggestion.subject if suggestion else "", max_chars=120, key="react_subject")
+            body = st.text_area(
+                "Mensaje (usa {nombre} para personalizar)", value=suggestion.body if suggestion else "", max_chars=2000, key="react_body"
+            )
             sure = st.checkbox("Confirmo el envío a los contactos con consentimiento", key="react_confirm")
             if st.button("Enviar campaña"):
                 if not sure:

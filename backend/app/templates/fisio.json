@@ -1,0 +1,72 @@
+{
+  "key": "fisio",
+  "version": 1,
+  "label": "Fisioterapia",
+  "profile": {
+    "business_type": "clínica de fisioterapia",
+    "services": "Evaluación inicial, sesiones de seguimiento y masaje terapéutico.",
+    "hours": "Lunes a viernes de 8:00 a 18:00."
+  },
+  "services": [
+    {
+      "name": "Evaluación inicial",
+      "duration_minutes": 60,
+      "deposit_cents": 3000,
+      "currency": "cad"
+    },
+    {
+      "name": "Sesión de seguimiento",
+      "duration_minutes": 45,
+      "deposit_cents": 0,
+      "currency": "cad"
+    },
+    {
+      "name": "Masaje terapéutico",
+      "duration_minutes": 60,
+      "deposit_cents": 2000,
+      "currency": "cad"
+    }
+  ],
+  "hours": [
+    {
+      "weekday": 0,
+      "open": "08:00",
+      "close": "18:00"
+    },
+    {
+      "weekday": 1,
+      "open": "08:00",
+      "close": "18:00"
+    },
+    {
+      "weekday": 2,
+      "open": "08:00",
+      "close": "18:00"
+    },
+    {
+      "weekday": 3,
+      "open": "08:00",
+      "close": "18:00"
+    },
+    {
+      "weekday": 4,
+      "open": "08:00",
+      "close": "18:00"
+    }
+  ],
+  "coverage": {
+    "postal_prefixes": [],
+    "cities": [],
+    "insurers": [
+      "Sun Life",
+      "Manulife",
+      "Canada Life",
+      "Green Shield",
+      "Blue Cross"
+    ]
+  },
+  "campaign": {
+    "subject": "¿Cómo va tu recuperación?",
+    "body": "Hola {nombre}, queremos saber cómo sigues. Si necesitas una sesión de seguimiento, puedes reservarla en línea."
+  }
+}

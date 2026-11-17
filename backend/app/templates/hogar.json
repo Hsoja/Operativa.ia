@@ -1,0 +1,76 @@
+{
+  "key": "hogar",
+  "version": 1,
+  "label": "Servicios a domicilio o taller",
+  "profile": {
+    "business_type": "servicios a domicilio y taller",
+    "services": "Visita de diagnóstico, mantenimiento y reparaciones.",
+    "hours": "Lunes a viernes de 8:00 a 17:00; sábados de 9:00 a 14:00."
+  },
+  "services": [
+    {
+      "name": "Visita de diagnóstico",
+      "duration_minutes": 60,
+      "deposit_cents": 3000,
+      "currency": "cad"
+    },
+    {
+      "name": "Mantenimiento",
+      "duration_minutes": 120,
+      "deposit_cents": 5000,
+      "currency": "cad"
+    },
+    {
+      "name": "Reparación",
+      "duration_minutes": 180,
+      "deposit_cents": 5000,
+      "currency": "cad"
+    }
+  ],
+  "hours": [
+    {
+      "weekday": 0,
+      "open": "08:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 1,
+      "open": "08:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 2,
+      "open": "08:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 3,
+      "open": "08:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 4,
+      "open": "08:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 5,
+      "open": "09:00",
+      "close": "14:00"
+    }
+  ],
+  "coverage": {
+    "postal_prefixes": [
+      "N2L",
+      "N2J",
+      "N2K",
+      "N2M"
+    ],
+    "cities": [],
+    "insurers": []
+  },
+  "campaign": {
+    "subject": "¿Toca el mantenimiento?",
+    "body": "Hola {nombre}, ya pasó un tiempo desde nuestra última visita. Agenda tu mantenimiento y evita sorpresas."
+  }
+}

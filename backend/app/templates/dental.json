@@ -1,0 +1,83 @@
+{
+  "key": "dental",
+  "version": 1,
+  "label": "Clínica dental",
+  "profile": {
+    "business_type": "clínica dental",
+    "services": "Limpieza dental, revisión general, blanqueamiento y consulta de ortodoncia.",
+    "hours": "Lunes a viernes de 9:00 a 17:00; sábados de 9:00 a 13:00."
+  },
+  "services": [
+    {
+      "name": "Limpieza dental",
+      "duration_minutes": 60,
+      "deposit_cents": 2500,
+      "currency": "cad"
+    },
+    {
+      "name": "Revisión general",
+      "duration_minutes": 30,
+      "deposit_cents": 0,
+      "currency": "cad"
+    },
+    {
+      "name": "Blanqueamiento",
+      "duration_minutes": 90,
+      "deposit_cents": 5000,
+      "currency": "cad"
+    },
+    {
+      "name": "Consulta de ortodoncia",
+      "duration_minutes": 45,
+      "deposit_cents": 2500,
+      "currency": "cad"
+    }
+  ],
+  "hours": [
+    {
+      "weekday": 0,
+      "open": "09:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 1,
+      "open": "09:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 2,
+      "open": "09:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 3,
+      "open": "09:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 4,
+      "open": "09:00",
+      "close": "17:00"
+    },
+    {
+      "weekday": 5,
+      "open": "09:00",
+      "close": "13:00"
+    }
+  ],
+  "coverage": {
+    "postal_prefixes": [],
+    "cities": [],
+    "insurers": [
+      "Sun Life",
+      "Manulife",
+      "Canada Life",
+      "Green Shield",
+      "Blue Cross"
+    ]
+  },
+  "campaign": {
+    "subject": "Es momento de tu limpieza dental",
+    "body": "Hola {nombre}, han pasado varios meses desde tu última visita. Reserva tu limpieza cuando te quede mejor; con gusto te atendemos."
+  }
+}

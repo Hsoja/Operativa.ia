@@ -1,7 +1,10 @@
 """Comandos de administración - Operativa.ia
 
 Uso:
-    python -m app.cli create-tenant --slug clinica-sol --name "Clínica Sol" [--timezone America/Toronto]
+    python -m app.cli list-templates
+    python -m app.cli create-tenant --slug clinica-sol --name "Clínica Sol" --template dental \
+        --location "123 King St, Waterloo, ON" [--timezone America/Toronto]
+    python -m app.cli apply-template --tenant clinica-sol --template dental
     python -m app.cli create-user --tenant clinica-sol --username ana --role owner
     python -m app.cli reset-password --username ana
     python -m app.cli set-active --tenant clinica-sol --active false
@@ -21,7 +24,7 @@ import sys
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.services import auth, booking, channels, conversations, tenants
+from app.services import auth, booking, channels, conversations, templates, tenants
 
 USERNAME = re.compile(r"[A-Za-z0-9_.-]{3,64}")
 
@@ -33,6 +36,14 @@ def _ask_password() -> str:
     return password
 
 
+def _report(applied: dict) -> None:
+    print(f"Perfil completado: {', '.join(applied['profile']) or 'nada (ya estaba)'}")
+    print(f"Servicios agregados: {', '.join(applied['services']) or 'ninguno'}")
+    print(f"Horario: {'aplicado' if applied['hours'] else 'se conservó el existente'}")
+    print(f"Cobertura: {'aplicada' if applied['coverage'] else 'sin cambios'}")
+    print("Revisa en el panel: los depósitos y las aseguradoras son valores de ejemplo.")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -42,6 +53,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--name", required=True)
     p.add_argument("--business-type", default="")
     p.add_argument("--timezone", default="America/Toronto")
+    p.add_argument("--location", default="", help="Dirección física (CASL la exige para enviar correos).")
+    p.add_argument("--template", help="Plantilla de vertical: ver list-templates.")
+
+    sub.add_parser("list-templates")
+
+    p = sub.add_parser("apply-template", help="Completa lo que el negocio tiene vacío; nunca pisa lo configurado.")
+    p.add_argument("--tenant", required=True)
+    p.add_argument("--template", required=True)
 
     p = sub.add_parser("create-user")
     p.add_argument("--tenant", required=True)
@@ -71,9 +90,24 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        if args.command == "create-tenant":
-            profile = tenants.TenantProfile(name=args.name, business_type=args.business_type, timezone=args.timezone)
-            tenants.create_tenant(args.slug, profile)
+        if args.command == "list-templates":
+            for key in templates.available():
+                print(f"{key}: {templates.load(key).label}")
+        elif args.command == "create-tenant":
+            if args.template:
+                templates.load(args.template)  # se valida antes de crear nada
+            profile = tenants.TenantProfile(
+                name=args.name, business_type=args.business_type, timezone=args.timezone, location=args.location
+            )
+            tenant_id = tenants.create_tenant(args.slug, profile)
+            if args.template:
+                _report(templates.apply(tenant_id, args.template))
+        elif args.command == "apply-template":
+            tenant = tenants.get_by_slug(args.tenant)
+            if tenant is None:
+                print("No existe ese negocio.", file=sys.stderr)
+                return 1
+            _report(templates.apply(tenant["id"], args.template))
         elif args.command == "create-user":
             tenant = tenants.get_by_slug(args.tenant)
             if tenant is None:

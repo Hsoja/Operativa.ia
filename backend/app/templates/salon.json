@@ -1,0 +1,72 @@
+{
+  "key": "salon",
+  "version": 1,
+  "label": "Salón de belleza",
+  "profile": {
+    "business_type": "salón de belleza",
+    "services": "Corte, color, peinado y manicure.",
+    "hours": "Martes a sábado de 10:00 a 19:00."
+  },
+  "services": [
+    {
+      "name": "Corte",
+      "duration_minutes": 45,
+      "deposit_cents": 1000,
+      "currency": "cad"
+    },
+    {
+      "name": "Color",
+      "duration_minutes": 120,
+      "deposit_cents": 3000,
+      "currency": "cad"
+    },
+    {
+      "name": "Peinado",
+      "duration_minutes": 60,
+      "deposit_cents": 1500,
+      "currency": "cad"
+    },
+    {
+      "name": "Manicure",
+      "duration_minutes": 45,
+      "deposit_cents": 1000,
+      "currency": "cad"
+    }
+  ],
+  "hours": [
+    {
+      "weekday": 1,
+      "open": "10:00",
+      "close": "19:00"
+    },
+    {
+      "weekday": 2,
+      "open": "10:00",
+      "close": "19:00"
+    },
+    {
+      "weekday": 3,
+      "open": "10:00",
+      "close": "19:00"
+    },
+    {
+      "weekday": 4,
+      "open": "10:00",
+      "close": "19:00"
+    },
+    {
+      "weekday": 5,
+      "open": "10:00",
+      "close": "19:00"
+    }
+  ],
+  "coverage": {
+    "postal_prefixes": [],
+    "cities": [],
+    "insurers": []
+  },
+  "campaign": {
+    "subject": "Te extrañamos en el salón",
+    "body": "Hola {nombre}, hace tiempo que no te vemos. Tenemos horarios disponibles esta semana; reserva el tuyo en línea."
+  }
+}
