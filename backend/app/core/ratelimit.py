@@ -54,6 +54,10 @@ def chat_rate() -> str:
     return get_settings().chat_rate
 
 
+def contact_rate() -> str:
+    return get_settings().contact_rate
+
+
 def login_rate() -> str:
     return get_settings().login_rate
 

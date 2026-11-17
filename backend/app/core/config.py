@@ -37,6 +37,10 @@ class Settings:
     llm_max_output_tokens: int
     llm_daily_tokens_per_ip: int
     llm_daily_tokens_global: int
+    llm_daily_tokens_per_tenant: int
+    contact_rate: str
+    chat_max_messages: int
+    conversation_retention_days: int
     alert_threshold: int
     calendar_enabled: bool
     groq_api_key: str
@@ -67,6 +71,13 @@ def _parse_origins(raw: str, env: str) -> tuple[str, ...]:
     return origins
 
 
+def _positive_int(name: str, default: str) -> int:
+    raw = os.getenv(name, default).strip()
+    if not raw.isdigit() or int(raw) <= 0:
+        raise ValueError(f"{name} debe ser un entero positivo.")
+    return int(raw)
+
+
 def _parse_proxies(raw: str):
     return tuple(ipaddress.ip_network(p.strip()) for p in raw.split(",") if p.strip())
 
@@ -77,6 +88,10 @@ def get_settings() -> Settings:
     if env not in VALID_ENVS:
         raise ValueError(f"ENV debe ser uno de {sorted(VALID_ENVS)}.")
 
+    ip_hash_salt = os.getenv("IP_HASH_SALT", "")
+    if env == "production" and len(ip_hash_salt) < 32:
+        raise ValueError("En producción IP_HASH_SALT es obligatorio (32 caracteres o más).")
+
     return Settings(
         env=env,
         allowed_origins=_parse_origins(os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS), env),
@@ -84,17 +99,21 @@ def get_settings() -> Settings:
         db_path=Path(os.getenv("DB_PATH", str(BACKEND_DIR / "data" / "operativa.db"))),
         log_dir=Path(os.getenv("LOG_DIR", str(BACKEND_DIR / "logs"))),
         secrets_dir=Path(os.getenv("SECRETS_DIR", str(ROOT_DIR / "secrets"))),
-        max_body_bytes=int(os.getenv("MAX_BODY_BYTES", "65536")),
+        max_body_bytes=_positive_int("MAX_BODY_BYTES", "65536"),
         rate_limit_storage=os.getenv("RATE_LIMIT_STORAGE", "memory://"),
         chat_rate=os.getenv("CHAT_RATE", "10/minute;100/day"),
         login_rate=os.getenv("LOGIN_RATE", "5/minute"),
         admin_rate=os.getenv("ADMIN_RATE", "60/minute"),
-        session_ttl_minutes=int(os.getenv("SESSION_TTL_MINUTES", "30")),
-        llm_max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "500")),
-        llm_daily_tokens_per_ip=int(os.getenv("LLM_DAILY_TOKENS_PER_IP", "20000")),
-        llm_daily_tokens_global=int(os.getenv("LLM_DAILY_TOKENS_GLOBAL", "200000")),
-        alert_threshold=int(os.getenv("ALERT_THRESHOLD", "20")),
+        session_ttl_minutes=_positive_int("SESSION_TTL_MINUTES", "30"),
+        llm_max_output_tokens=_positive_int("LLM_MAX_OUTPUT_TOKENS", "500"),
+        llm_daily_tokens_per_ip=_positive_int("LLM_DAILY_TOKENS_PER_IP", "20000"),
+        llm_daily_tokens_global=_positive_int("LLM_DAILY_TOKENS_GLOBAL", "200000"),
+        llm_daily_tokens_per_tenant=_positive_int("LLM_DAILY_TOKENS_PER_TENANT", "100000"),
+        contact_rate=os.getenv("CONTACT_RATE", "5/minute;20/day"),
+        chat_max_messages=_positive_int("CHAT_MAX_MESSAGES", "60"),
+        conversation_retention_days=_positive_int("CONVERSATION_RETENTION_DAYS", "90"),
+        alert_threshold=_positive_int("ALERT_THRESHOLD", "20"),
         calendar_enabled=os.getenv("CALENDAR_ENABLED", "false").strip().lower() == "true",
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
-        ip_hash_salt=os.getenv("IP_HASH_SALT", ""),
+        ip_hash_salt=ip_hash_salt,
     )
