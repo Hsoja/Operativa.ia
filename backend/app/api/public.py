@@ -14,7 +14,7 @@ from pydantic import StringConstraints
 from app.api.deps import public_tenant
 from app.core.config import get_settings
 from app.core.logs import security_event
-from app.core.ratelimit import chat_rate, client_ip, contact_rate, limiter
+from app.core.ratelimit import browse_rate, chat_rate, client_ip, contact_rate, limiter
 from app.core.validation import CleanStr, StrictModel
 from app.services import agent, booking, coverage, leads, payments, tenants
 
@@ -29,7 +29,7 @@ class ChatRequest(StrictModel):
 
 
 @router.get("/profile")
-@limiter.limit(chat_rate)
+@limiter.limit(browse_rate)
 def read_profile(request: Request, tenant: dict = Depends(public_tenant)):
     """Nombre y datos públicos del negocio para el encabezado del widget."""
     profile = tenants.public_profile(tenant)
@@ -53,7 +53,7 @@ def check_coverage(request: Request, payload: coverage.CoverageQuery, tenant: di
 
 
 @router.get("/services")
-@limiter.limit(chat_rate)
+@limiter.limit(browse_rate)
 def read_services(request: Request, tenant: dict = Depends(public_tenant)):
     """Servicios reservables con su duración y depósito (montos en centavos)."""
     first, last = booking.bookable_days(tenant)
@@ -65,7 +65,7 @@ def read_services(request: Request, tenant: dict = Depends(public_tenant)):
 
 
 @router.get("/slots")
-@limiter.limit(chat_rate)
+@limiter.limit(browse_rate)
 def read_slots(
     request: Request,
     service_id: Annotated[int, Query(ge=1)],
@@ -107,7 +107,7 @@ def create_booking(request: Request, payload: booking.BookingIn, tenant: dict = 
 
 
 @router.get("/bookings/{ref}")
-@limiter.limit(chat_rate)
+@limiter.limit(browse_rate)
 def read_booking(request: Request, ref: Annotated[str, StringConstraints(pattern=booking.REF_PATTERN)], tenant: dict = Depends(public_tenant)):
     """Estado de una reserva por su referencia secreta (sin datos del cliente)."""
     found = booking.status_by_ref(tenant["id"], ref)

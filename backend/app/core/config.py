@@ -41,6 +41,7 @@ class Settings:
     llm_daily_tokens_global: int
     llm_daily_tokens_per_tenant: int
     contact_rate: str
+    browse_rate: str
     chat_max_messages: int
     conversation_retention_days: int
     alert_threshold: int
@@ -156,6 +157,7 @@ def get_settings() -> Settings:
         llm_daily_tokens_global=_positive_int("LLM_DAILY_TOKENS_GLOBAL", "200000"),
         llm_daily_tokens_per_tenant=_positive_int("LLM_DAILY_TOKENS_PER_TENANT", "100000"),
         contact_rate=os.getenv("CONTACT_RATE", "5/minute;20/day"),
+        browse_rate=os.getenv("BROWSE_RATE", "60/minute;1000/day"),
         chat_max_messages=_positive_int("CHAT_MAX_MESSAGES", "60"),
         conversation_retention_days=_positive_int("CONVERSATION_RETENTION_DAYS", "90"),
         alert_threshold=_positive_int("ALERT_THRESHOLD", "20"),
