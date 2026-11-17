@@ -75,21 +75,64 @@ def test_chat_never_books_on_its_own(panel, monkeypatch):
     assert not any("agendada" in t.value.lower() for t in panel.text)
 
 
-def test_booking_form_requires_confirmation(panel, monkeypatch):
-    spy = MagicMock(return_value={"status": "disabled", "message": "La agenda de Google Calendar no está activada."})
+def _with_service():
+    from app.services import booking
+
+    tenant = tenants.get_by_slug("demo")
+    booking.create_service(tenant["id"], booking.ServiceIn(name="Limpieza", duration_minutes=60, deposit_cents=2500))
+    booking.set_hours(
+        tenant["id"],
+        booking.WeeklyHours(ranges=[booking.HoursRange(weekday=d, open="09:00", close="12:00") for d in range(7)]),
+    )
+
+
+def test_booking_needs_services_first(panel):
+    panel = _login(panel, PASSWORD)
+    assert any("Configura servicios" in i.value for i in panel.info)
+
+
+def test_booking_form_requires_confirmation_and_blocks_the_slot(panel, monkeypatch):
+    from app.services import booking
+
+    _with_service()
+    spy = MagicMock(return_value={"status": "disabled"})
     monkeypatch.setattr(calendar_service, "create_appointment", spy)
     panel = _login(panel, PASSWORD)
-    panel.text_input[0].set_value("Ana Sol")
-    panel.text_input[1].set_value("Limpieza")
+    [t for t in panel.text_input if t.label == "Nombre del cliente"][0].set_value("Ana Sol")
     panel = _button(panel, "Agendar cita").click().run()
     assert any("confirmación" in e.value for e in panel.error)
     spy.assert_not_called()
 
-    panel.checkbox[0].check()
+    [c for c in panel.checkbox if c.label.startswith("Confirmo")][0].check()
+    slot = [sb for sb in panel.selectbox if sb.label == "Hora"][0].value
     panel = _button(panel, "Agendar cita").click().run()
-    spy.assert_called_once()
+    assert not panel.exception and any("Cita agendada" in s.value for s in panel.success)
     assert spy.call_args.kwargs["timezone"] == "America/Toronto"
-    assert spy.call_args.kwargs["summary"] == "Limpieza - Ana Sol"
+    tenant = tenants.get_by_slug("demo")
+    appointments = booking.list_appointments(tenant["id"], since=0)
+    assert len(appointments) == 1 and appointments[0]["status"] == "confirmed" and appointments[0]["deposit_cents"] == 0
+    day = [d for d in panel.date_input if d.label == "Fecha"][0].value
+    assert f"{day.isoformat()}T{slot}" not in booking.list_slots(tenant, booking.list_services(tenant["id"])[0], day)
+
+
+def test_services_and_hours_from_panel(panel):
+    from app.services import booking
+
+    panel = _login(panel, PASSWORD)
+    [t for t in panel.text_input if t.label == "Nombre del servicio"][0].set_value("Revisión")
+    panel = _button(panel, "Agregar servicio").click().run()
+    assert any("Servicio agregado" in s.value for s in panel.success)
+    [t for t in panel.text_input if t.label == "Lunes"][0].set_value("09:00-13:00, 15:00-18:00")
+    panel = _button(panel, "Guardar horario").click().run()
+    assert any("Horario guardado" in s.value for s in panel.success)
+    tenant = tenants.get_by_slug("demo")
+    assert booking.get_hours(tenant["id"]) == [
+        {"weekday": 0, "open": "09:00", "close": "13:00"},
+        {"weekday": 0, "open": "15:00", "close": "18:00"},
+    ]
+    [t for t in panel.text_input if t.label == "Martes"][0].set_value("12:00-09:00")
+    panel = _button(panel, "Guardar horario").click().run()
+    assert any("Formato inválido" in e.value for e in panel.error)
 
 
 def test_panel_closes_when_business_is_deactivated(panel):

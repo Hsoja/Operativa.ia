@@ -5,11 +5,12 @@ Todo lo que muestra pertenece al negocio del usuario que inició sesión.
 Nada se agenda solo: una cita se crea únicamente desde el formulario y con confirmación explícita.
 """
 
+import sqlite3
 import sys
 import time
-from datetime import date, datetime, timedelta
-from datetime import time as dtime
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -25,7 +26,7 @@ from app.core.config import get_settings
 from app.core.logs import configure_logging, hash_identifier, security_event
 from pydantic import ValidationError
 
-from app.services import agent, auth, conversations, coverage, leads, metrics, tenants
+from app.services import agent, auth, booking, conversations, coverage, leads, metrics, tenants
 from app.services.calendar_service import (
     CalendarDisabledError,
     create_appointment,
@@ -33,6 +34,14 @@ from app.services.calendar_service import (
 )
 
 MAX_CHAT_CHARS = 1900
+WEEKDAYS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+STATUS_LABELS = {
+    "pending_payment": "Esperando pago",
+    "confirmed": "Confirmada",
+    "cancelled": "Cancelada",
+    "expired": "Vencida",
+    "needs_refund": "Revisar reembolso",
+}
 
 st.set_page_config(page_title="Operativa.ia - Panel", page_icon="🤖", layout="wide")
 
@@ -90,8 +99,8 @@ def main() -> None:
     col4.metric("Mensajes de clientes (7 días)", summary["messages_week"])
 
     st.divider()
-    tab_agenda, tab_leads, tab_conversations, tab_coverage, tab_sofia = st.tabs(
-        ["📅 Agenda", "📥 Leads", "💬 Conversaciones", "🗺️ Cobertura", "🤖 Probar a Sofía"]
+    tab_agenda, tab_setup, tab_leads, tab_conversations, tab_coverage, tab_sofia = st.tabs(
+        ["📅 Agenda", "⚙️ Servicios y horario", "📥 Leads", "💬 Conversaciones", "🗺️ Cobertura", "🤖 Probar a Sofía"]
     )
 
     # --- Agenda -------------------------------------------------------------------------------------
@@ -118,39 +127,142 @@ def main() -> None:
             security_event("calendar_error", "ERROR", error=type(e).__name__)
             st.error("No se pudieron cargar las citas de Google Calendar.")
 
+        st.subheader("Citas reservadas")
+        upcoming = booking.list_appointments(tenant["id"], since=int(time.time()) - 86400)
+        if upcoming:
+            st.dataframe(
+                [
+                    {
+                        "Inicio": datetime.fromtimestamp(a["starts_at"], ZoneInfo(tenant["timezone"])).strftime("%Y-%m-%d %H:%M"),
+                        "Servicio": a["service"],
+                        "Cliente": a["customer_name"],
+                        "Estado": STATUS_LABELS.get(a["status"], a["status"]),
+                        "Depósito": f"{a['deposit_cents'] / 100:.2f} {a['currency'].upper()}" if a["deposit_cents"] else "-",
+                    }
+                    for a in upcoming
+                ],
+                hide_index=True,
+            )
+        else:
+            st.info("No hay citas próximas.")
+
         st.subheader("Agendar una cita")
-        with st.form("appointment", clear_on_submit=False):
-            customer = st.text_input("Nombre del cliente", max_chars=80)
-            service_name = st.text_input("Servicio", max_chars=100)
-            day = st.date_input("Fecha", min_value=date.today(), value=date.today() + timedelta(days=1))
-            hour = st.time_input("Hora", value=dtime(10, 0), step=900)
-            duration = st.number_input("Duración (minutos)", min_value=15, max_value=240, value=45, step=15)
-            notes = st.text_area("Notas (sin datos de salud ni de pago)", max_chars=500)
-            confirmed = st.checkbox("Confirmo que el cliente aceptó esta fecha y hora")
-            book = st.form_submit_button("Agendar cita")
-        if book:
-            if not confirmed:
-                st.error("Marca la confirmación antes de agendar.")
-            elif len(customer.strip()) < 2 or len(service_name.strip()) < 2:
-                st.error("Escribe el nombre del cliente y el servicio.")
-            else:
-                result = create_appointment(
-                    summary=f"{service_name.strip()} - {customer.strip()}",
-                    description=notes,
-                    start_time_iso=datetime.combine(day, hour).strftime("%Y-%m-%dT%H:%M:%S"),
-                    duration_minutes=int(duration),
-                    timezone=tenant["timezone"],
-                )
-                security_event(
-                    "appointment_requested",
-                    tenant=tenant["slug"],
-                    status=result.get("status"),
-                    user=hash_identifier(user["username"].lower()),
-                )
-                if result.get("status") == "success":
-                    st.success(f"Cita agendada: {result['summary']} · {result['start']}")
+        services = booking.list_services(tenant["id"])
+        if not services:
+            st.info("Configura servicios y horario en la pestaña Servicios y horario para poder agendar.")
+        else:
+            by_name = {s["name"]: s for s in services}
+            service = by_name[st.selectbox("Servicio", list(by_name), key="book_service")]
+            first, last = booking.bookable_days(tenant)
+            day = st.date_input("Fecha", min_value=first, max_value=last, value=first + timedelta(days=1), key="book_day")
+            free = booking.list_slots(tenant, service, day)
+            slot = st.selectbox("Hora", [s[11:] for s in free], key="book_slot") if free else None
+            if not free:
+                st.info("No hay horarios libres ese día.")
+            customer = st.text_input("Nombre del cliente", max_chars=80, key="book_customer")
+            confirmed = st.checkbox("Confirmo que el cliente aceptó esta fecha y hora", key="book_confirm")
+            if st.button("Agendar cita", disabled=slot is None):
+                if not confirmed:
+                    st.error("Marca la confirmación antes de agendar.")
+                elif len(customer.strip()) < 2:
+                    st.error("Escribe el nombre del cliente.")
                 else:
-                    st.error(result.get("message", "No se pudo agendar la cita."))
+                    try:
+                        created = booking.create_booking(
+                            tenant,
+                            booking.PanelBookingIn(service_id=service["id"], start=f"{day.isoformat()}T{slot}", name=customer),
+                            source="panel",
+                        )
+                    except booking.BookingError:
+                        st.error("Ese horario ya no está disponible.")
+                    else:
+                        sync = create_appointment(
+                            summary=f"{service['name']} - {customer.strip()}",
+                            description="Agendada desde el panel.",
+                            start_time_iso=f"{day.isoformat()}T{slot}:00",
+                            duration_minutes=service["duration_minutes"],
+                            timezone=tenant["timezone"],
+                        )
+                        security_event(
+                            "appointment_requested",
+                            tenant=tenant["slug"],
+                            status=created["status"],
+                            calendar=sync.get("status"),
+                            user=hash_identifier(user["username"].lower()),
+                        )
+                        st.success(f"Cita agendada: {service['name']} · {day.isoformat()} {slot}")
+
+        if user["role"] in ("owner", "admin") and upcoming:
+            st.subheader("Cancelar una cita")
+            cancellable = {
+                f"#{a['id']} · {a['service']} · {a['customer_name']}": a["id"]
+                for a in upcoming
+                if a["status"] in ("pending_payment", "confirmed")
+            }
+            if cancellable:
+                choice = st.selectbox("Cita", list(cancellable), key="cancel_choice")
+                if st.button("Cancelar cita"):
+                    booking.cancel(tenant["id"], cancellable[choice])
+                    security_event("appointment_cancelled", tenant=tenant["slug"])
+                    st.success("Cita cancelada. Si hubo depósito, reembólsalo desde el panel de Stripe.")
+
+    # --- Servicios y horario ---------------------------------------------------------------------------
+    with tab_setup:
+        can_edit = user["role"] in ("owner", "admin")
+        st.subheader("Servicios")
+        all_services = booking.list_services(tenant["id"], only_active=False)
+        if all_services:
+            st.dataframe(
+                [
+                    {
+                        "Servicio": s["name"],
+                        "Duración (min)": s["duration_minutes"],
+                        "Depósito": f"{s['deposit_cents'] / 100:.2f} {s['currency'].upper()}",
+                        "Activo": "Sí" if s["active"] else "No",
+                    }
+                    for s in all_services
+                ],
+                hide_index=True,
+            )
+        with st.form("new_service"):
+            name = st.text_input("Nombre del servicio", max_chars=80, disabled=not can_edit)
+            minutes = st.number_input("Duración (minutos)", min_value=5, max_value=480, value=60, step=5, disabled=not can_edit)
+            deposit = st.number_input("Depósito (0 = sin depósito)", min_value=0.0, max_value=1000.0, value=0.0, step=5.0, disabled=not can_edit)
+            currency = st.selectbox("Moneda", ["cad", "usd", "mxn", "eur"], disabled=not can_edit)
+            add = st.form_submit_button("Agregar servicio", disabled=not can_edit)
+        if add and can_edit:
+            try:
+                booking.create_service(
+                    tenant["id"],
+                    booking.ServiceIn(name=name, duration_minutes=int(minutes), deposit_cents=round(deposit * 100), currency=currency),
+                )
+                security_event("service_saved", tenant=tenant["slug"])
+                st.success("Servicio agregado.")
+            except (ValidationError, sqlite3.IntegrityError):
+                st.error("Revisa el nombre (2 a 80 caracteres, sin repetir) y los valores.")
+
+        st.subheader("Horario semanal")
+        st.caption("Rangos separados por coma, por ejemplo 09:00-13:00, 15:00-19:00. Vacío = cerrado.")
+        current = booking.get_hours(tenant["id"])
+        with st.form("hours"):
+            inputs = {}
+            for weekday, label in enumerate(WEEKDAYS):
+                value = ", ".join(f"{r['open']}-{r['close']}" for r in current if r["weekday"] == weekday)
+                inputs[weekday] = st.text_input(label, value, max_chars=100, disabled=not can_edit)
+            save_hours = st.form_submit_button("Guardar horario", disabled=not can_edit)
+        if save_hours and can_edit:
+            try:
+                ranges = [
+                    booking.HoursRange(weekday=weekday, open=span.split("-")[0].strip(), close=span.split("-")[1].strip())
+                    for weekday, text in inputs.items()
+                    for span in text.split(",")
+                    if span.strip()
+                ]
+                booking.set_hours(tenant["id"], booking.WeeklyHours(ranges=ranges))
+                security_event("hours_saved", tenant=tenant["slug"])
+                st.success("Horario guardado.")
+            except (ValidationError, IndexError):
+                st.error("Formato inválido. Usa HH:MM-HH:MM y que los rangos no se solapen.")
 
     # --- Leads ---------------------------------------------------------------------------------------
     with tab_leads:
