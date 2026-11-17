@@ -211,6 +211,38 @@ def main() -> None:
     # --- Servicios y horario ---------------------------------------------------------------------------
     with tab_setup:
         can_edit = user["role"] in ("owner", "admin")
+
+        st.subheader("Perfil del negocio")
+        st.caption("Alimenta las respuestas de Sofía. El correo de aviso es opcional: sin él, nadie se entera de un lead nuevo salvo quien revise la pestaña Leads.")
+        with st.form("business_profile"):
+            p_name = st.text_input("Nombre del negocio", value=tenant["name"], max_chars=120, disabled=not can_edit)
+            p_type = st.text_input("Tipo de negocio", value=tenant["business_type"], max_chars=80, disabled=not can_edit)
+            p_services = st.text_area("Servicios (texto libre, para Sofía)", value=tenant["services"], max_chars=1500, disabled=not can_edit)
+            p_hours = st.text_input("Horario (texto libre, para Sofía)", value=tenant["hours"], max_chars=300, disabled=not can_edit)
+            p_location = st.text_input("Dirección física (CASL la exige para enviar correos de reactivación)", value=tenant["location"], max_chars=200, disabled=not can_edit)
+            p_timezone = st.text_input("Zona horaria (IANA, p. ej. America/Toronto)", value=tenant["timezone"], max_chars=64, disabled=not can_edit)
+            p_notify = st.text_input(
+                "Correo de aviso de leads nuevos (vacío = apagado)",
+                value=tenant["notify_email"],
+                max_chars=254,
+                disabled=not can_edit,
+                help="Requiere que el servidor tenga SMTP configurado (SMTP_HOST, SMTP_FROM, ...).",
+            )
+            save_profile = st.form_submit_button("Guardar perfil", disabled=not can_edit)
+        if save_profile and can_edit:
+            try:
+                tenants.update_profile(
+                    tenant["id"],
+                    tenants.TenantProfile(
+                        name=p_name, business_type=p_type, services=p_services, hours=p_hours,
+                        location=p_location, timezone=p_timezone, notify_email=p_notify,
+                    ),
+                )
+                security_event("tenant_profile_updated", tenant=tenant["slug"], user=hash_identifier(user["username"].lower()))
+                st.success("Perfil guardado.")
+            except ValidationError:
+                st.error("Revisa los datos: el correo de aviso o la zona horaria no son válidos, o un campo es muy largo.")
+
         st.subheader("Servicios")
         all_services = booking.list_services(tenant["id"], only_active=False)
         if all_services:
