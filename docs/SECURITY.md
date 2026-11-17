@@ -11,8 +11,12 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 | Cuenta de administrador | Fuerza bruta, robo de sesión, CSRF | Argon2id, bloqueo progresivo, cookies `HttpOnly`/`Secure`/`SameSite=Strict`, doble token CSRF |
 | Instrucciones de Sofía | Inyección de prompt, filtración | Roles separados, registro de intentos, filtro de salida |
 | Datos de citas en Google Calendar | Exposición en logs o pantalla | Logs sin datos personales, panel con texto plano |
+| Datos de cada PYME (leads, conversaciones, equipo) | Que un negocio vea o cambie datos de otro (IDOR, `tenant_id` enviado por el cliente) | `tenant_id` en cada tabla y consulta, tomado solo de la sesión o del slug; prueba de aislamiento entre dos negocios |
+| Permisos dentro de un negocio | Escalada de privilegios (staff que actúa como owner) | `require_roles` en cada ruta, matriz de roles probada, owners solo por CLI |
+| Formulario y chat públicos | Spam, abuso de costo, datos personales sin consentimiento | Límites por IP, topes de tokens por negocio, trampa anti-bots, consentimiento obligatorio, retención de conversaciones |
+| Historial del chat | Turnos de la asistente inventados por el cliente | El historial vive en el servidor; el navegador solo tiene un identificador aleatorio guardado como hash |
 
-**Límites de confianza:** navegador → proxy → API o panel → Groq y Google. Todo lo que envía el navegador, responde el modelo o devuelve un proveedor se trata como no confiable.
+**Límites de confianza:** navegador → proxy → API o panel → Groq y Google. Entre negocios también hay un límite: el slug público identifica al negocio, pero nunca da acceso a sus datos. Todo lo que envía el navegador, responde el modelo o devuelve un proveedor se trata como no confiable.
 
 ## Controles y dónde están
 
@@ -21,6 +25,8 @@ Proceso y controles del prototipo. El estado de cada punto de la lista está en 
 - **Registro de seguridad:** `backend/app/core/logs.py`. Escribe JSON en `backend/logs/security.jsonl`, con rotación de 5 MB y 5 copias. Avisa con `security_alert` al llegar a `ALERT_THRESHOLD` eventos del mismo tipo en 5 minutos.
 - **Límites de peticiones:** `backend/app/core/ratelimit.py`. `X-Forwarded-For` solo se usa si la conexión viene de `TRUSTED_PROXIES`.
 - **Autenticación:** `backend/app/services/auth.py`, `backend/app/api/admin.py`, `backend/app/api/deps.py` y `backend/app/cli.py`.
+- **Multi-tenant y roles:** `backend/app/services/tenants.py`, `backend/app/api/deps.py` (`require_roles`, `public_tenant`). Matriz: staff ve; admin además edita el perfil y borra leads; owner además crea personal. Negocios y owners se crean solo por CLI.
+- **Datos personales:** `backend/app/services/leads.py` y `conversations.py`. Retención con `python -m app.cli purge` (`CONVERSATION_RETENTION_DAYS`); se recomienda ejecutarlo a diario con cron.
 - **LLM:** `backend/app/services/llm_guard.py` y `backend/app/services/agent.py`.
 - **Calendar:** `backend/app/services/calendar_service.py`.
 - **Subidas futuras:** `backend/app/core/uploads.py`. Aún no hay ninguna ruta que lo use.
@@ -81,4 +87,4 @@ Trata como comprometidos el cliente OAuth de Google y su token compartidos antes
 
 - **Recuperación de contraseña por web:** enlace de un solo uso, aleatorio, guardado como hash, con 15 minutos de validez, respuesta genérica y límite de peticiones. Requiere un sistema de correo.
 - **Doble factor (MFA)** para administradores.
-- **Roadmap del prompt:** migración a PostgreSQL, multi-tenant y contenedores.
+- **Roadmap:** migración a PostgreSQL con Row Level Security como segunda barrera del multi-tenant, y contenedores.
