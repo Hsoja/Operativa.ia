@@ -76,3 +76,20 @@ def test_exposed_file_scan_passes():
 def test_streamlit_config_is_local_only():
     text = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
     assert 'address = "localhost"' in text and "enableXsrfProtection = true" in text
+
+
+def test_caddy_never_publishes_the_panel_and_sets_site_csp():
+    caddy = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    proxied = re.findall(r"reverse_proxy\s+(\S+)", caddy)
+    assert proxied and all(target == "127.0.0.1:8000" for target in proxied)
+    assert "8501" not in "".join(proxied)
+    assert "script-src 'self';" in caddy and "unsafe-inline" not in caddy and "unsafe-eval" not in caddy
+    assert "hide .*" in caddy
+
+
+def test_caddy_csp_matches_the_one_tested_with_vite_preview():
+    caddy = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    vite = (ROOT / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
+    directives = re.findall(r'"([a-z-]+ [^"]+)",', vite.split("export const CSP")[1].split("].join")[0])
+    caddy_csp = re.search(r'Content-Security-Policy "([^"]+)"', caddy).group(1)
+    assert [d.strip() for d in caddy_csp.split(";")][: len(directives)] == directives
