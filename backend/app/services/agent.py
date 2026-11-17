@@ -5,13 +5,17 @@ Groq (Llama 3) con un prompt construido por negocio. El texto del cliente va sie
 """
 
 import json
+from datetime import date
+from typing import Annotated
 
 from groq import Groq
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
+
+from app.core.validation import CleanStr, StrictModel
 
 from app.core.config import get_settings
 from app.core.logs import hash_identifier, security_event
-from app.services import conversations, coverage, llm_guard
+from app.services import booking, conversations, coverage, llm_guard
 
 MODEL = "llama-3.3-70b-versatile"
 
@@ -27,7 +31,9 @@ RULES = """Reglas de comportamiento:
 TOOL_RULES = """8. Para saber si el negocio atiende la zona del cliente o acepta su aseguradora o plan, usa solo la herramienta check_coverage; nunca lo supongas.
 9. Pide solo código postal o ciudad y el nombre de la aseguradora o plan. Nunca pidas números de póliza ni datos de salud."""
 
-# Lista blanca: la única herramienta que el modelo puede pedir. Es de solo lectura y no actúa por nadie.
+SLOT_RULES = """10. Para ver horarios libres usa solo la herramienta list_available_slots. Nunca reserves ni cobres: comparte el enlace de reserva para que el cliente confirme y pague."""
+
+# Lista blanca: las únicas herramientas que el modelo puede pedir. Son de solo lectura y no actúan por nadie.
 COVERAGE_TOOL = {
     "type": "function",
     "function": {
@@ -44,9 +50,33 @@ COVERAGE_TOOL = {
         },
     },
 }
-ALLOWED_TOOLS = {"check_coverage"}
+SLOTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_available_slots",
+        "description": "Lista horarios libres de un servicio del negocio en una fecha (YYYY-MM-DD).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Nombre del servicio", "maxLength": 80},
+                "date": {"type": "string", "description": "Fecha en formato YYYY-MM-DD", "maxLength": 10},
+            },
+            "required": ["service", "date"],
+            "additionalProperties": False,
+        },
+    },
+}
+TOOL_SPECS = {"check_coverage": COVERAGE_TOOL, "list_available_slots": SLOTS_TOOL}
+ALLOWED_TOOLS = set(TOOL_SPECS)
+MAX_SLOTS_SHOWN = 8
+
+
+class SlotsQuery(StrictModel):
+    service: CleanStr(min_length=2, max_length=80)
+    date: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 MAX_TOOL_CALLS = 2
 MAX_TOOL_ARGS_CHARS = 1000
+SLOTS_ERROR_REPLY = "No pude consultar los horarios con esos datos. ¿Me dices el servicio y la fecha (AAAA-MM-DD)?"
 TOOL_ERROR_REPLY = "No pude comprobar la cobertura con esos datos. ¿Me indicas tu código postal o ciudad y tu aseguradora?"
 COVERED_FOLLOW_UP = " ¿Te gustaría solicitar una cita?"
 
@@ -55,7 +85,21 @@ BUDGET_REPLY = "Se alcanzó el límite de uso de la asistente por hoy. Intenta d
 TOO_LONG_REPLY = "Esta conversación ya es muy larga. Recarga la página para empezar una nueva."
 
 
-def build_system_prompt(tenant: dict, tools: bool = False) -> str:
+def enabled_tools(tenant_id: int) -> list[str]:
+    names = []
+    if coverage.has_rules(tenant_id):
+        names.append("check_coverage")
+    if booking.list_services(tenant_id) and booking.get_hours(tenant_id):
+        names.append("list_available_slots")
+    return names
+
+
+def booking_link(tenant: dict) -> str:
+    site = get_settings().public_site_url
+    return f"{site}/#/book/{tenant['slug']}" if site else ""
+
+
+def build_system_prompt(tenant: dict, tools: bool = False, slots: bool = False) -> str:
     kind = f", un negocio de {tenant['business_type']}" if tenant.get("business_type") else ""
     data = "\n".join(
         f"{label}: {tenant[field]}"
@@ -69,7 +113,34 @@ def build_system_prompt(tenant: dict, tools: bool = False) -> str:
         f"<<<\n{data}\n>>>\n\n"
         f"{RULES}"
         + (f"\n{TOOL_RULES}" if tools else "")
+        + (f"\n{SLOT_RULES}" if slots else "")
     )
+
+
+def _run_slots_tool(tenant: dict, raw_args, client_hash: str) -> str:
+    """Horarios libres calculados por el servidor, con texto fijo. Nunca reserva."""
+    try:
+        if not isinstance(raw_args, str) or len(raw_args) > MAX_TOOL_ARGS_CHARS:
+            raise ValueError("args")
+        query = SlotsQuery.model_validate(json.loads(raw_args or "{}"))
+        day = date.fromisoformat(query.date)
+    except (ValueError, ValidationError):
+        security_event("tool_args_rejected", "WARNING", tool="list_available_slots", client=client_hash)
+        return SLOTS_ERROR_REPLY
+    wanted = coverage.normalize_name(query.service)
+    matches = [s for s in booking.list_services(tenant["id"]) if wanted and wanted in coverage.normalize_name(s["name"])]
+    if len(matches) != 1:
+        names = ", ".join(s["name"] for s in booking.list_services(tenant["id"]))
+        return f"¿Para cuál servicio? Opciones: {names}."
+    service = matches[0]
+    slots = booking.list_slots(tenant, service, day)
+    security_event("slots_listed", tenant=tenant["slug"], via="sofia", count=len(slots))
+    link = booking_link(tenant)
+    tail = f" Puedes reservar aquí: {link}" if link else " El equipo del negocio puede confirmarte la cita."
+    if not slots:
+        return f"No hay horarios libres para {service['name']} el {day.isoformat()}." + tail
+    shown = ", ".join(slot[11:] for slot in slots[:MAX_SLOTS_SHOWN])
+    return f"Horarios libres para {service['name']} el {day.isoformat()}: {shown}." + tail
 
 
 def _run_coverage_tool(tenant: dict, tool_calls, client_hash: str) -> str:
@@ -137,20 +208,20 @@ def process_message(
         return result("limited", BUDGET_REPLY)
 
     try:
-        tools = coverage.has_rules(tenant_id)
+        names = enabled_tools(tenant_id)
         groq_client = Groq(api_key=settings.groq_api_key, timeout=20.0, max_retries=1)
         request = {
             "model": MODEL,
             "messages": [
-                {"role": "system", "content": build_system_prompt(tenant, tools)},
+                {"role": "system", "content": build_system_prompt(tenant, "check_coverage" in names, "list_available_slots" in names)},
                 *history,
                 {"role": "user", "content": message},
             ],
             "temperature": 0.5,
             "max_tokens": settings.llm_max_output_tokens,
         }
-        if tools:
-            request.update(tools=[COVERAGE_TOOL], tool_choice="auto")
+        if names:
+            request.update(tools=[TOOL_SPECS[n] for n in names], tool_choice="auto")
         completion = groq_client.chat.completions.create(**request)
 
         usage = getattr(completion, "usage", None)
@@ -159,15 +230,25 @@ def process_message(
         reply_message = completion.choices[0].message
         tool_calls = getattr(reply_message, "tool_calls", None) or []
         if tool_calls:
-            if not tools:
+            requested = {getattr(getattr(c, "function", None), "name", None) for c in tool_calls}
+            if not names:
                 security_event("tool_rejected", "WARNING", reason="tools_disabled", client=client_hash)
                 content = TOOL_ERROR_REPLY
+            elif not requested <= set(names) or len(requested) != 1:
+                security_event("tool_rejected", "WARNING", reason="not_allowed", client=client_hash)
+                content = TOOL_ERROR_REPLY
+            elif requested == {"list_available_slots"}:
+                content = (
+                    _run_slots_tool(tenant, tool_calls[0].function.arguments, client_hash)
+                    if len(tool_calls) == 1
+                    else TOOL_ERROR_REPLY
+                )
             else:
                 content = _run_coverage_tool(tenant, tool_calls, client_hash)
         else:
             content = reply_message.content
 
-        agent_response, blocked = llm_guard.filter_reply(content, f"{RULES}\n{TOOL_RULES}")
+        agent_response, blocked = llm_guard.filter_reply(content, f"{RULES}\n{TOOL_RULES}\n{SLOT_RULES}")
         if blocked:
             security_event("llm_output_blocked", "WARNING", reason=blocked, client=client_hash, tenant=tenant["slug"])
 

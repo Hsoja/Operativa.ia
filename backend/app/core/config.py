@@ -52,6 +52,12 @@ class Settings:
     whatsapp_access_token: str
     whatsapp_graph_version: str
     whatsapp_max_age_seconds: int
+    stripe_secret_key: str
+    stripe_webhook_secret: str
+    public_site_url: str
+    booking_hold_minutes: int
+    booking_lead_minutes: int
+    booking_days_ahead: int
 
     @property
     def is_production(self) -> bool:
@@ -60,6 +66,10 @@ class Settings:
     @property
     def whatsapp_enabled(self) -> bool:
         return bool(self.whatsapp_app_secret and self.whatsapp_verify_token and self.whatsapp_access_token)
+
+    @property
+    def stripe_enabled(self) -> bool:
+        return bool(self.stripe_secret_key and self.stripe_webhook_secret)
 
     @property
     def session_cookie(self) -> str:
@@ -106,6 +116,22 @@ def get_settings() -> Settings:
         raise ValueError(f"WhatsApp requiere las tres variables: {', '.join(WHATSAPP_VARS)}.")
     if whatsapp["WHATSAPP_APP_SECRET"] and len(whatsapp["WHATSAPP_VERIFY_TOKEN"]) < 24:
         raise ValueError("WHATSAPP_VERIFY_TOKEN debe tener 24 caracteres o más.")
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    stripe_webhook = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+    site_url = os.getenv("PUBLIC_SITE_URL", "").strip().rstrip("/")
+    if bool(stripe_key) != bool(stripe_webhook):
+        raise ValueError("Stripe requiere STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET juntas.")
+    if stripe_key:
+        if not stripe_key.startswith(("sk_test_", "sk_live_", "rk_test_", "rk_live_")):
+            raise ValueError("STRIPE_SECRET_KEY no tiene un formato válido.")
+        if "_live_" in stripe_key and env != "production":
+            raise ValueError("Una llave live de Stripe solo se acepta con ENV=production.")
+        if not stripe_webhook.startswith("whsec_"):
+            raise ValueError("STRIPE_WEBHOOK_SECRET debe empezar por whsec_.")
+        if not site_url:
+            raise ValueError("Con Stripe activo, PUBLIC_SITE_URL es obligatorio (URL de retorno del pago).")
+    if site_url:
+        _parse_origins(site_url, env)  # mismas reglas: sin comodines, https en producción
     graph_version = os.getenv("WHATSAPP_GRAPH_VERSION", "v23.0").strip()
     if not re.fullmatch(r"v\d{1,3}\.\d{1,2}", graph_version):
         raise ValueError("WHATSAPP_GRAPH_VERSION debe tener la forma v23.0.")
@@ -141,4 +167,10 @@ def get_settings() -> Settings:
         whatsapp_access_token=whatsapp["WHATSAPP_ACCESS_TOKEN"],
         whatsapp_graph_version=graph_version,
         whatsapp_max_age_seconds=_positive_int("WHATSAPP_MAX_AGE_SECONDS", "3600"),
+        stripe_secret_key=stripe_key,
+        stripe_webhook_secret=stripe_webhook,
+        public_site_url=site_url,
+        booking_hold_minutes=_positive_int("BOOKING_HOLD_MINUTES", "35"),
+        booking_lead_minutes=_positive_int("BOOKING_LEAD_MINUTES", "60"),
+        booking_days_ahead=_positive_int("BOOKING_DAYS_AHEAD", "60"),
     )

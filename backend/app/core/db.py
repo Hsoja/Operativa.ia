@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from app.core.config import get_settings
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tenants (
@@ -114,6 +114,44 @@ CREATE TABLE IF NOT EXISTS coverage_insurers (
     label TEXT NOT NULL,
     UNIQUE (tenant_id, value)
 );
+CREATE TABLE IF NOT EXISTS services (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 5 AND 480),
+    deposit_cents INTEGER NOT NULL CHECK (deposit_cents BETWEEN 0 AND 100000),
+    currency TEXT NOT NULL CHECK (currency IN ('cad', 'usd', 'mxn', 'eur')),
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    UNIQUE (tenant_id, name)
+);
+CREATE TABLE IF NOT EXISTS business_hours (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    open_minute INTEGER NOT NULL CHECK (open_minute BETWEEN 0 AND 1439),
+    close_minute INTEGER NOT NULL CHECK (close_minute BETWEEN 1 AND 1440),
+    CHECK (open_minute < close_minute)
+);
+CREATE TABLE IF NOT EXISTS appointments (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    service_id INTEGER NOT NULL REFERENCES services(id),
+    starts_at INTEGER NOT NULL,
+    ends_at INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending_payment', 'confirmed', 'cancelled', 'expired', 'needs_refund')),
+    source TEXT NOT NULL CHECK (source IN ('web', 'panel')),
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL DEFAULT '',
+    deposit_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    ref_hash TEXT NOT NULL UNIQUE,
+    hold_expires_at INTEGER,
+    stripe_session_id TEXT UNIQUE,
+    created_at INTEGER NOT NULL,
+    confirmed_at INTEGER,
+    CHECK (starts_at < ends_at)
+);
+CREATE INDEX IF NOT EXISTS appointments_tenant ON appointments (tenant_id, starts_at);
 """
 
 LEGACY_TABLE_QUERY = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'admin_users'"
@@ -133,11 +171,11 @@ def _initialize(connection: sqlite3.Connection) -> None:
             "La base de datos es de la versión sin multi-tenant. Respáldala, bórrala y crea "
             "los negocios y usuarios de nuevo con `python -m app.cli` (ver README)."
         )
-    if version not in (0, 2, 3):
+    if version not in (0, 2, 3, 4):
         raise SchemaVersionError("Versión de base de datos desconocida.")
-    # v2 -> v3 -> v4 solo agregan tablas (CREATE ... IF NOT EXISTS): el mismo script sirve de migración
+    # De v2 en adelante solo se agregan tablas (CREATE ... IF NOT EXISTS): el mismo script sirve de migración
     connection.executescript(SCHEMA)
-    connection.execute("PRAGMA user_version = 4")
+    connection.execute("PRAGMA user_version = 5")
 
 
 @contextmanager

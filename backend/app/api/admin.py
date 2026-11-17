@@ -9,6 +9,7 @@ Crear negocios y owners solo se puede por CLI en el servidor: no hay "superadmin
 
 import secrets
 import sqlite3
+import time
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -19,7 +20,7 @@ from app.core.config import get_settings
 from app.core.logs import hash_identifier, security_event
 from app.core.ratelimit import admin_rate, client_ip, ip_session_key, limiter, login_rate
 from app.core.validation import StrictModel
-from app.services import agent, auth, conversations, coverage, leads, tenants
+from app.services import agent, auth, booking, conversations, coverage, leads, tenants
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Panel"])
 
@@ -121,7 +122,9 @@ def update_tenant(request: Request, payload: tenants.TenantProfile, session: dic
 def read_agent_prompt(request: Request, session: dict = Depends(require_roles(*MANAGERS))):
     """Prompt que usa Sofía para este negocio (solo owner y admin)."""
     tenant_id = session["tenant_id"]
-    return {"system_prompt": agent.build_system_prompt(tenants.get(tenant_id), coverage.has_rules(tenant_id))}
+    names = agent.enabled_tools(tenant_id)
+    prompt = agent.build_system_prompt(tenants.get(tenant_id), "check_coverage" in names, "list_available_slots" in names)
+    return {"system_prompt": prompt}
 
 
 @router.get("/coverage")
@@ -187,3 +190,67 @@ def read_conversation(request: Request, conversation_id: int, session: dict = De
     if messages is None:
         raise HTTPException(status_code=404, detail="No encontrado.")
     return {"id": conversation_id, "messages": messages}
+
+
+# --- Agenda: servicios, horario y citas ------------------------------------------------------------
+
+@router.get("/services")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def read_services(request: Request, session: dict = Depends(require_roles(*ALL_ROLES))):
+    return {"services": booking.list_services(session["tenant_id"], only_active=False)}
+
+
+@router.post("/services", status_code=201)
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def create_service(request: Request, payload: booking.ServiceIn, session: dict = Depends(require_roles_csrf(*MANAGERS))):
+    try:
+        service_id = booking.create_service(session["tenant_id"], payload)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Ya existe un servicio con ese nombre.") from None
+    security_event("service_saved", tenant=session["tenant_slug"])
+    return booking.get_service(session["tenant_id"], service_id, only_active=False)
+
+
+@router.post("/services/{service_id}")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def update_service(
+    request: Request, service_id: int, payload: booking.ServiceIn, session: dict = Depends(require_roles_csrf(*MANAGERS))
+):
+    try:
+        updated = booking.update_service(session["tenant_id"], service_id, payload)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Ya existe un servicio con ese nombre.") from None
+    if not updated:
+        raise HTTPException(status_code=404, detail="No encontrado.")
+    security_event("service_saved", tenant=session["tenant_slug"])
+    return booking.get_service(session["tenant_id"], service_id, only_active=False)
+
+
+@router.get("/hours")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def read_hours(request: Request, session: dict = Depends(require_roles(*ALL_ROLES))):
+    return {"ranges": booking.get_hours(session["tenant_id"])}
+
+
+@router.post("/hours")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def update_hours(request: Request, payload: booking.WeeklyHours, session: dict = Depends(require_roles_csrf(*MANAGERS))):
+    booking.set_hours(session["tenant_id"], payload)
+    security_event("hours_saved", tenant=session["tenant_slug"])
+    return {"ranges": booking.get_hours(session["tenant_id"])}
+
+
+@router.get("/appointments")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def read_appointments(request: Request, session: dict = Depends(require_roles(*ALL_ROLES))):
+    return {"appointments": booking.list_appointments(session["tenant_id"], since=int(time.time()) - 86400)}
+
+
+@router.post("/appointments/{appointment_id}/cancel")
+@limiter.limit(admin_rate, key_func=ip_session_key)
+def cancel_appointment(request: Request, appointment_id: int, session: dict = Depends(require_roles_csrf(*MANAGERS))):
+    """Cancela la cita y libera el hueco. El reembolso del depósito, si aplica, se hace en el panel de Stripe."""
+    if not booking.cancel(session["tenant_id"], appointment_id):
+        raise HTTPException(status_code=404, detail="No encontrado.")
+    security_event("appointment_cancelled", tenant=session["tenant_slug"])
+    return {"status": "cancelled"}

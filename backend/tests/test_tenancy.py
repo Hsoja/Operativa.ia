@@ -38,6 +38,18 @@ EXPECTED_ROUTES = {
     ("POST", "/api/v1/public/{slug}/chat"),
     ("POST", "/api/v1/public/{slug}/contact"),
     ("POST", "/api/v1/public/{slug}/coverage"),
+    ("GET", "/api/v1/public/{slug}/services"),
+    ("GET", "/api/v1/public/{slug}/slots"),
+    ("POST", "/api/v1/public/{slug}/bookings"),
+    ("GET", "/api/v1/public/{slug}/bookings/{ref}"),
+    ("GET", "/api/v1/admin/services"),
+    ("POST", "/api/v1/admin/services"),
+    ("POST", "/api/v1/admin/services/{service_id}"),
+    ("GET", "/api/v1/admin/hours"),
+    ("POST", "/api/v1/admin/hours"),
+    ("GET", "/api/v1/admin/appointments"),
+    ("POST", "/api/v1/admin/appointments/{appointment_id}/cancel"),
+    ("POST", "/api/v1/webhooks/stripe"),
     ("GET", "/api/v1/admin/coverage"),
     ("POST", "/api/v1/admin/coverage"),
     ("GET", "/api/v1/admin/csrf"),
@@ -201,7 +213,7 @@ def test_writes_require_csrf_bound_to_session(make_client):
 def test_all_private_routes_require_session(client):
     for method, path in EXPECTED_ROUTES:
         if path.startswith("/api/v1/admin/") and path not in {"/api/v1/admin/csrf", "/api/v1/admin/login"}:
-            concrete = path.replace("{lead_id}", "1").replace("{conversation_id}", "1")
+            concrete = path.replace("{lead_id}", "1").replace("{conversation_id}", "1").replace("{service_id}", "1").replace("{appointment_id}", "1")
             r = client.request(method, concrete, headers=ORIGIN)
             assert r.status_code in (401, 403), (method, path, r.status_code)
 

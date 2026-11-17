@@ -21,7 +21,7 @@ import sys
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.services import auth, channels, conversations, tenants
+from app.services import auth, booking, channels, conversations, tenants
 
 USERNAME = re.compile(r"[A-Za-z0-9_.-]{3,64}")
 
@@ -100,8 +100,13 @@ def main(argv: list[str] | None = None) -> int:
                 auth.purge_login_attempts(),
                 conversations.purge_older_than(get_settings().conversation_retention_days),
                 channels.purge_events(),
+                booking.expire_holds(),
             )
-            print("Sesiones: {}, intentos de login: {}, conversaciones: {}, eventos de webhook: {}".format(*removed))
+            print(
+                "Sesiones: {}, intentos de login: {}, conversaciones: {}, eventos de webhook: {}, reservas vencidas: {}".format(
+                    *removed
+                )
+            )
     except ValidationError as exc:
         fields = ", ".join(".".join(str(p) for p in e["loc"]) for e in exc.errors())
         print(f"Datos inválidos: {fields}", file=sys.stderr)
