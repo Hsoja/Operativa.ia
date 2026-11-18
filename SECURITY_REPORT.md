@@ -23,7 +23,7 @@ Sin hallazgos altos ni secretos expuestos. El único rojo del CI (`npm audit` en
 - **Ruta pública `/profile`:** confirmado que expone solo `{slug, name, business_type}`; `notify_email` solo es visible/editable por `/api/v1/admin/tenant` (roles owner/admin).
 - **Inyección de cabeceras de correo:** el asunto del aviso siempre se reduce a una línea (`_one_line` limpia `\r`/`\n`) antes de usarse; se confirmó con una prueba que un nombre con salto de línea no agrega cabeceras extra.
 - **Fail-closed:** sin `SMTP_HOST` configurado o sin `notify_email`, la función no hace nada; un fallo de SMTP nunca rompe la respuesta al visitante (tarea en segundo plano).
-- **Secretos:** el correo real (`adminmilamoresgdl@gmail.com`) y la contraseña de aplicación de Gmail nunca se escriben en el repo; `render.yaml` los deja como variables `sync: false` para llenar solo en el panel de Render.
+- **Secretos:** el correo real de aviso y la contraseña de aplicación de Gmail nunca se escriben en el repo; `render.yaml` los deja como variables `sync: false` para llenar solo en el panel de Render.
 - **Dependencias:** ninguna nueva.
 
 ### No verificado
