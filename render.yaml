@@ -33,6 +33,27 @@ services:
       # Crea el negocio "operativa" al arrancar si el disco efímero lo perdió entre reinicios.
       - key: SEED_DEMO_TENANT
         value: operativa
+      # Correo donde avisar de un lead nuevo del formulario. Opcional, no es un secreto, pero no
+      # se escribe aquí: se pide en el panel de Render al crear el Blueprint (nunca en este archivo).
+      - key: SEED_DEMO_NOTIFY_EMAIL
+        sync: false
+      # URL del sitio: la exige el correo saliente (enlace de baja) y Stripe (URLs de retorno).
+      - key: PUBLIC_SITE_URL
+        value: https://hsoja.github.io/Operativa.ia
+      # Correo saliente (opcional): sin estas 4 variables, el aviso de leads y la reactivación
+      # quedan apagados (fail-closed), sin afectar al resto del sitio. Con Gmail: smtp.gmail.com,
+      # puerto 587, usuario = tu correo completo, contraseña = una "contraseña de aplicación" de
+      # Google (myaccount.google.com/apppasswords; requiere verificación en dos pasos activada).
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
       # Opcional: sin esta llave, Sofía responde con el motor local (sin IA), no falla.
       # Render pedirá el valor solo al crear el Blueprint por primera vez; puede dejarse vacío.
       - key: GROQ_API_KEY

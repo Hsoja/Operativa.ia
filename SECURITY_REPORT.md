@@ -1,5 +1,38 @@
 # Reporte de seguridad de Operativa.ia
 
+## Auditoría del 17 de noviembre de 2026 · rama `feat/lead-email-notify`
+
+**Alcance:** nueva función de aviso por correo al negocio cuando llega un contacto nuevo (`notify_email`), pestaña de perfil en el panel (no existía ninguna), demo pública (GitHub Pages + Render) y su documentación. 3 commits.
+
+### Veredicto: 🟢 Aprobado
+
+Sin hallazgos altos ni secretos expuestos. El único rojo del CI (`npm audit` en el job `frontend`) es una alerta preexistente en `main` (ReDoS en `picomatch`, dependencia de desarrollo de Vite/Vitest), no introducida por esta rama; ya tiene un PR de Dependabot pendiente (#17, sube Vite) que la resuelve por separado.
+
+### Resultados por herramienta
+
+| Comprobación | Resultado |
+|---|---|
+| `gitleaks` en todo el historial (78 commits) | ✅ Sin fugas |
+| CI `backend` (pytest, bandit, pip-audit) | ✅ Correcto |
+| CI `semgrep` | ✅ Correcto |
+| CI `secrets` | ✅ Correcto |
+| CI `frontend` → `npm audit --audit-level=high` | 🟡 1 aviso (`picomatch`/ReDoS), preexistente en `main`, con fix pendiente en PR #17 de Dependabot |
+
+### Revisión anti-puertas traseras
+
+- **Ruta pública `/profile`:** confirmado que expone solo `{slug, name, business_type}`; `notify_email` solo es visible/editable por `/api/v1/admin/tenant` (roles owner/admin).
+- **Inyección de cabeceras de correo:** el asunto del aviso siempre se reduce a una línea (`_one_line` limpia `\r`/`\n`) antes de usarse; se confirmó con una prueba que un nombre con salto de línea no agrega cabeceras extra.
+- **Fail-closed:** sin `SMTP_HOST` configurado o sin `notify_email`, la función no hace nada; un fallo de SMTP nunca rompe la respuesta al visitante (tarea en segundo plano).
+- **Secretos:** el correo real (`adminmilamoresgdl@gmail.com`) y la contraseña de aplicación de Gmail nunca se escriben en el repo; `render.yaml` los deja como variables `sync: false` para llenar solo en el panel de Render.
+- **Dependencias:** ninguna nueva.
+
+### No verificado
+
+- **SMTP real:** no se probó el envío contra `smtp.gmail.com` con una cuenta real (sin credenciales en esta sesión). Las pruebas usan un sustituto que verifica qué se intenta enviar.
+- **Render:** el servicio aún no existe; `render.yaml` no se ha desplegado de punta a punta.
+
+---
+
 ## Auditoría del 16 de noviembre de 2026 · rama `feat/producto-completo`
 
 **Alcance:** todo el diff contra `main` (`20a794d`): multi-tenant y roles, chat y contacto por negocio, sitio conectado a la API, panel, Caddy, WhatsApp, coberturas, agenda con depósito (Stripe), reactivación por correo (CASL) y plantillas. 70+ archivos, unas 6 800 líneas añadidas.

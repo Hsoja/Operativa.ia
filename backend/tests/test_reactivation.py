@@ -281,3 +281,81 @@ def test_booking_can_record_marketing_consent(biz):
 def test_smtp_misconfiguration_refuses_to_start(make_client, env):
     with pytest.raises(ValueError):
         make_client(**env)
+
+
+# --- Aviso de un lead nuevo al negocio (no es marketing, no aplica CASL) --------------------------
+
+def test_contact_notifies_the_business_when_configured(biz):
+    tenants.update_profile(biz.sol, tenants.TenantProfile(name="Clínica Sol", notify_email="dueña@sol.example"))
+    assert contact(biz.client).status_code == 201
+    [message] = sent_messages()
+    assert message["To"] == "dueña@sol.example"
+    assert message["Subject"] == "New contact form submission: Ana Sol"
+    text = message.get_content()
+    assert "ana@sol.example" in text and "Quiero información" in text
+    assert FakeSMTP.instances[0].tls
+
+
+def test_contact_sends_nothing_without_notify_email_configured(biz):
+    assert contact(biz.client).status_code == 201  # biz.sol no tiene notify_email
+    assert sent_messages() == []
+
+
+def test_contact_sends_nothing_without_smtp_configured(make_client):
+    reset_db()
+    make_tenant("sol", "Clínica Sol", notify_email="duena@sol.example")
+    c = make_client()  # sin SMTP_HOST/SMTP_FROM
+    assert contact(c).status_code == 201
+    assert FakeSMTP.instances == []
+
+
+def test_notification_failure_does_not_break_the_visitors_request(biz, monkeypatch, security_log):
+    tenants.update_profile(biz.sol, tenants.TenantProfile(name="Clínica Sol", notify_email="duena@sol.example"))
+
+    class Down(FakeSMTP):
+        def starttls(self, context=None):
+            raise OSError("detalle-interno")
+
+    monkeypatch.setattr(reactivation.smtplib, "SMTP", Down)
+    assert contact(biz.client).status_code == 201
+    assert any(e["event"] == "smtp_error" for e in security_log())
+
+
+def test_notify_email_never_leaks_through_the_public_profile_route(biz):
+    tenants.update_profile(biz.sol, tenants.TenantProfile(name="Clínica Sol", notify_email="secreto@sol.example"))
+    body = biz.client.get("/api/v1/public/sol/profile").json()
+    assert "secreto@sol.example" not in json.dumps(body) and set(body) == {"slug", "name", "business_type"}
+
+
+def test_notify_email_visible_and_editable_only_by_managers(biz):
+    from helpers import ORIGIN as O, login as do_login
+
+    def logged(username):
+        c = biz.make(**SMTP)
+        assert do_login(c, username).status_code == 200
+        return c, {**O, "X-CSRF-Token": c.cookies.get("csrf")}
+
+    staff, h = logged("sol-staff")
+    assert staff.get("/api/v1/admin/tenant").json()["notify_email"] == ""
+    body = {"name": "Clínica Sol", "notify_email": "intento@sol.example"}
+    assert staff.post("/api/v1/admin/tenant", json=body, headers=h).status_code == 403
+
+    admin, h = logged("sol-admin")
+    r = admin.post("/api/v1/admin/tenant", json=body, headers=h)
+    assert r.status_code == 200 and r.json()["notify_email"] == "intento@sol.example"
+
+
+@pytest.mark.parametrize("bad", ["no-es-correo", "a@b", "x" * 250 + "@example.com"])
+def test_notify_email_validation(biz, bad):
+    admin, h = (lambda c=biz.make(**SMTP): (c, {**ORIGIN, "X-CSRF-Token": (login(c, "sol-admin"), c.cookies.get("csrf"))[1]}))()
+    r = admin.post("/api/v1/admin/tenant", json={"name": "Clínica Sol", "notify_email": bad}, headers=h)
+    assert r.status_code == 422
+
+
+def test_contact_name_cannot_inject_email_headers(biz):
+    """clean_text conserva \n en texto libre; notify_new_lead debe neutralizarlo antes del asunto."""
+    tenants.update_profile(biz.sol, tenants.TenantProfile(name="Clínica Sol", notify_email="duena@sol.example"))
+    assert contact(biz.client, name="Ana\r\nBcc: espia@evil.example").status_code == 201
+    [message] = sent_messages()
+    assert "\n" not in message["Subject"] and "\r" not in message["Subject"]
+    assert message["To"] == "duena@sol.example"  # ninguna cabecera adicional se coló

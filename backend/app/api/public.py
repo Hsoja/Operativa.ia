@@ -7,7 +7,7 @@ y solo se aceptan negocios activos. No usan cookies, así que no necesitan CSRF.
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import StringConstraints
 
@@ -119,11 +119,15 @@ def read_booking(request: Request, ref: Annotated[str, StringConstraints(pattern
 
 @router.post("/contact", status_code=201)
 @limiter.limit(contact_rate)
-def submit_contact(request: Request, payload: leads.LeadIn, tenant: dict = Depends(public_tenant)):
+def submit_contact(
+    request: Request, payload: leads.LeadIn, background: BackgroundTasks, tenant: dict = Depends(public_tenant)
+):
     """Solicitud de contacto o demo. Requiere consentimiento; el contenido nunca va al log."""
     leads.create_lead(tenant["id"], payload)
     reactivation.record_contact(tenant["id"], payload.email, payload.name, payload.marketing_consent, payload.source)
     security_event("lead_received", tenant=tenant["slug"], source=payload.source)
+    # En segundo plano: un correo de aviso lento o fallido no debe retrasar ni romper la respuesta
+    background.add_task(reactivation.notify_new_lead, tenant, payload)
     return JSONResponse(status_code=201, content={"status": "received"})
 
 

@@ -197,3 +197,31 @@ def test_panel_reactivation_needs_confirmation_and_respects_casl(panel, monkeypa
     panel = _button(panel, "Enviar campaña").click().run()
     # Sin SMTP configurado (ni contactos con consentimiento) la campaña se bloquea con un motivo claro
     assert any("correo no está configurado" in e.value for e in panel.error) and sent == []
+
+
+def test_panel_business_profile_edit_and_notify_email(panel):
+    from app.services import tenants
+
+    panel = _login(panel, PASSWORD)
+    [t for t in panel.text_input if t.label == "Correo de aviso de leads nuevos (vacío = apagado)"][0].set_value("duena@demo.example")
+    [t for t in panel.text_input if t.label == "Dirección física (CASL la exige para enviar correos de reactivación)"][0].set_value("1 Main St, Waterloo, ON")
+    panel = _form_button(panel, "Guardar perfil").click().run()
+    assert any("Perfil guardado" in s.value for s in panel.success)
+    saved = tenants.get_by_slug("demo")
+    assert saved["notify_email"] == "duena@demo.example" and saved["location"] == "1 Main St, Waterloo, ON"
+
+
+def test_panel_business_profile_rejects_bad_email(panel):
+    panel = _login(panel, PASSWORD)
+    [t for t in panel.text_input if t.label == "Correo de aviso de leads nuevos (vacío = apagado)"][0].set_value("no-es-correo")
+    panel = _form_button(panel, "Guardar perfil").click().run()
+    assert any("no son válidos" in e.value for e in panel.error)
+
+
+def test_staff_sees_business_profile_read_only(client):
+    reset_db()
+    make_user(make_tenant("demo"), "admin", "staff")
+    panel = _login(AppTest.from_file(PANEL, default_timeout=30).run(), PASSWORD)
+    profile_fields = [t for t in panel.text_input if "negocio" in t.label.lower() or "aviso" in t.label.lower()]
+    assert profile_fields and all(t.disabled for t in profile_fields)
+    assert _form_button(panel, "Guardar perfil").disabled

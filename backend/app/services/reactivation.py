@@ -1,6 +1,8 @@
-"""Reactivación de clientes por correo, con CASL - Operativa.ia (P2.11)
+"""Correo saliente - Operativa.ia: reactivación de clientes (P2.11) y aviso de leads nuevos.
 
-Reglas (Ley canadiense antispam, CASL):
+Reglas de las CAMPAÑAS de reactivación (Ley canadiense antispam, CASL). El aviso de un lead nuevo
+al propio negocio (ver notify_new_lead) es una notificación operativa, no una campaña, y no le
+aplican estas reglas:
 - Solo consentimiento EXPLÍCITO: una casilla desmarcada por defecto, guardada con fecha y origen.
   Una casilla sin marcar nunca revoca ni concede nada.
 - Cada mensaje identifica al negocio (nombre y dirección física) e incluye una baja de un clic.
@@ -227,6 +229,44 @@ def deliver(tenant: dict, campaign_id: int, campaign: CampaignIn, sends: list[tu
         db.execute("UPDATE campaigns SET sent = ?, failed = ? WHERE id = ?", (sent, failed, campaign_id))
     security_event("campaign_delivered", tenant=tenant["slug"], campaign=campaign_id, sent=sent, failed=failed)
     return {"sent": sent, "failed": failed}
+
+
+# --- Aviso de un lead nuevo al negocio (no es marketing: no aplica CASL) --------------------------
+
+def _one_line(value: str) -> str:
+    """Nunca se pega texto de un visitante en una cabecera de correo sin limpiar los saltos de línea."""
+    return value.replace("\r", " ").replace("\n", " ").strip()
+
+
+def notify_new_lead(tenant: dict, lead) -> bool:
+    """Avisa al negocio de una solicitud de contacto nueva, si configuró un correo de aviso.
+    Es una notificación operativa al propio negocio sobre su cliente, no un mensaje comercial
+    a un tercero: no requiere el consentimiento ni la baja que exige CASL para las campañas."""
+    settings = get_settings()
+    to = (tenant.get("notify_email") or "").strip()
+    if not settings.smtp_enabled or not to:
+        return False
+    message = EmailMessage()
+    message["Subject"] = _one_line(f"New contact form submission: {lead.name}")[:120]
+    message["From"] = formataddr((tenant["name"], settings.smtp_from))
+    message["To"] = to
+    message["Message-ID"] = make_msgid()
+    message.set_content(
+        f"New contact form submission for {tenant['name']}.\n\n"
+        f"Name: {lead.name}\n"
+        f"Email: {lead.email}\n"
+        f"Business: {lead.business or '-'}\n"
+        f"Topic: {lead.topic}\n\n"
+        f"Message:\n{lead.message}\n"
+    )
+    try:
+        server = _smtp_connection()
+        server.send_message(message)
+        server.quit()
+        return True
+    except (OSError, smtplib.SMTPException) as exc:
+        security_event("smtp_error", "ERROR", error=type(exc).__name__)
+        return False
 
 
 def unsubscribe(tenant_id: int, token: str, now: int | None = None) -> bool:
