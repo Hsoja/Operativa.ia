@@ -327,6 +327,67 @@ button:disabled {
     margin-top: 0.4rem;
   }
 
+  /* ---- Hero tipo "escenario": panel claro, tipografía enorme y robot al centro ---- */
+  .hero-frame {
+    background: linear-gradient(165deg, #e5173f 0%, #ff5a1f 55%, #ffb347 100%);
+  }
+
+  .stage {
+    background: radial-gradient(120% 80% at 50% 0%, #fbf6f1 0%, #f1e8e0 100%);
+    color: var(--color-ink);
+    box-shadow: 0 40px 90px -40px rgb(11 7 6 / 0.55);
+  }
+
+  .hero-word {
+    font-size: clamp(3.3rem, 15.5vw, 10rem);
+    font-weight: 800;
+    line-height: 0.84;
+    letter-spacing: -0.065em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+  }
+
+  .hero-band {
+    background: #fff;
+    padding-block: 1rem;
+    box-shadow: 0 1px 0 rgb(11 7 6 / 0.06), 0 -1px 0 rgb(11 7 6 / 0.06);
+  }
+
+  .stage-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.1rem;
+    min-height: 3.5rem;
+    padding: 0.4rem 0.45rem 0.4rem 1.6rem;
+    border-radius: 1.1rem;
+    font-weight: 700;
+    font-size: 1.02rem;
+    color: #170a05;
+    background: var(--grad);
+    box-shadow: 0 14px 34px -12px rgb(229 23 63 / 0.7);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .stage-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 44px -12px rgb(229 23 63 / 0.85);
+  }
+
+  .stage-cta-chip {
+    display: grid;
+    place-items: center;
+    width: 2.7rem;
+    height: 2.7rem;
+    border-radius: 0.8rem;
+    background: #fff;
+    color: var(--color-ink);
+  }
+
+  .stage :focus-visible,
+  header :focus-visible {
+    outline-color: var(--color-flame);
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: rgb(255 240 228 / 0.18) transparent;

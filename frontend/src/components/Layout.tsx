@@ -41,8 +41,8 @@ export function Header({ route }: { route: Route }) {
         initial={{ y: -24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}
-        className={`mx-auto flex h-15 max-w-5xl items-center justify-between rounded-full border py-2 pr-2 pl-5 transition-all duration-300 ${
-          scrolled || open ? "glass border-line !bg-ink-2/80 shadow-2xl shadow-black/40" : "border-transparent"
+        className={`mx-auto flex h-15 max-w-5xl items-center justify-between rounded-full border border-black/5 bg-[#fbf6f1]/95 py-2 pr-2 pl-5 text-ink backdrop-blur transition-all duration-300 ${
+          scrolled || open ? "shadow-2xl shadow-black/30" : "shadow-lg shadow-black/10"
         }`}
       >
         <a href="#/" aria-label="Operativa.ia home" className="relative z-10">
@@ -54,9 +54,9 @@ export function Header({ route }: { route: Route }) {
               <a
                 href={item.href}
                 aria-current={route === item.route ? "page" : undefined}
-                className={`relative block rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${route === item.route ? "text-cream" : "text-mute hover:text-cream"}`}
+                className={`relative block rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${route === item.route ? "text-ink" : "text-[#5b4d45] hover:text-ink"}`}
               >
-                {route === item.route && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-white/9" transition={{ type: "spring", stiffness: 340, damping: 30 }} />}
+                {route === item.route && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-ember/20" transition={{ type: "spring", stiffness: 340, damping: 30 }} />}
                 <span className="relative">{item.label}</span>
               </a>
             </li>
@@ -69,7 +69,7 @@ export function Header({ route }: { route: Route }) {
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
-          className="relative z-10 grid h-11 w-11 place-items-center rounded-full bg-white/8 md:hidden"
+          className="relative z-10 grid h-11 w-11 place-items-center rounded-full bg-black/7 md:hidden"
         >
           {open ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -82,7 +82,7 @@ export function Header({ route }: { route: Route }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className="glass mx-auto mt-2 max-w-5xl rounded-3xl bg-ink-2/90 p-3 md:hidden"
+            className="mx-auto mt-2 max-w-5xl rounded-3xl border border-black/5 bg-[#fbf6f1] p-3 text-ink shadow-2xl shadow-black/30 md:hidden"
           >
             {NAV.map((item) => (
               <a
@@ -90,7 +90,7 @@ export function Header({ route }: { route: Route }) {
                 href={item.href}
                 onClick={() => setOpen(false)}
                 aria-current={route === item.route ? "page" : undefined}
-                className={`block rounded-2xl px-4 py-3.5 text-lg font-medium ${route === item.route ? "bg-white/9" : ""}`}
+                className={`block rounded-2xl px-4 py-3.5 text-lg font-medium ${route === item.route ? "bg-ember/20" : ""}`}
               >
                 {item.label}
               </a>
