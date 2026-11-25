@@ -1,5 +1,5 @@
 import { motion, useScroll, useTransform } from "motion/react";
-import { ArrowRight, ArrowUpRight, Check, Mic, Play, Plus, RotateCcw, Sparkles, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, Mic, Plus, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useChat } from "../components/ChatContext";
@@ -8,124 +8,110 @@ import { Robot, RobotHead } from "../components/Robot";
 import { Card, PrototypeNote, Reveal, Waveform } from "../components/ui";
 import { FAQS, REVIEWS, SERVICES, STEPS } from "../content/site";
 
-const FLOATING_WORDS = [
-  { text: "appointments", x: "4%", y: "14%", o: 0.75 },
-  { text: "follow-ups", x: "13%", y: "34%", o: 1 },
-  { text: "questions", x: "2%", y: "52%", o: 0.55 },
-  { text: "reminders", x: "12%", y: "72%", o: 0.8 },
-  { text: "bookings", x: "27%", y: "90%", o: 0.4 },
-  { text: "inbox", x: "24%", y: "10%", o: 0.4 },
+const TICKER = [
+  { k: "24/7", v: "lead capture" },
+  { k: "48h", v: "template setup" },
+  { k: "4", v: "industry templates" },
+  { k: "1-click", v: "email opt-out" },
+  { k: "", v: "Calendars" },
+  { k: "", v: "Email" },
+  { k: "", v: "Messaging" },
+  { k: "", v: "Booking systems" },
 ];
-
-const TOOLS = ["Calendars", "Email", "Messaging", "Spreadsheets", "CRMs", "Booking systems", "Web forms", "Help desks"];
 
 const VOICE_LINES = ["Which days do you have openings?", "Can I move my appointment to Friday?", "Do you work with small teams?", "How do I get started?"];
 
-function Hero() {
-  const { openChat } = useChat();
-  const ref = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const stageY = useTransform(scrollYProgress, [0, 1], [0, 90]);
-
+function Ticker() {
+  const row = [...TICKER, ...TICKER];
   return (
-    <section ref={ref} className="relative overflow-hidden pt-34 sm:pt-42">
-      <div className="shell relative z-10 text-center">
-        <motion.span initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="glass inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium text-mute sm:text-sm">
-          <Sparkles size={14} className="text-glow" /> AI implementation for small businesses
-        </motion.span>
-        <motion.h1 initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.08, ease: [0.2, 0.7, 0.2, 1] }} className="display mx-auto mt-6 max-w-5xl">
-          AI that fits your business,{" "}
-          <span className="serif grad-text pr-1 text-[1.1em]">not the other way around</span>
-        </motion.h1>
-        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }} className="lede mx-auto mt-6 max-w-2xl">
-          We learn how you work, customize an assistant around it, connect your tools and stay with your team. The chatbot is just the start.
-        </motion.p>
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }} className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a href="#/contact" className="btn btn-primary w-full sm:w-auto">
-            Book a free demo <ArrowUpRight size={18} />
-          </a>
-          <button onClick={() => openChat()} className="btn btn-ghost w-full sm:w-auto">
-            <RobotHead className="h-6 w-6" /> Talk to Sofía
-          </button>
-        </motion.div>
-      </div>
-
-      <motion.div style={{ y: stageY }} className="relative mx-auto mt-4 h-[27rem] max-w-6xl sm:h-[36rem] lg:h-[40rem]">
-        <div className="absolute top-1/2 left-1/2 h-[75%] w-[75%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-ember/20 blur-[90px]" />
-        <ParticleOrb className="absolute top-1/2 left-1/2 aspect-square h-[118%] max-w-none -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute inset-0 flex items-end justify-center pb-3">
-          <Robot className="relative h-[80%] w-auto drop-shadow-[0_24px_60px_rgba(255,90,31,0.38)]" />
-        </div>
-
-        <div className="absolute inset-0 hidden lg:block" aria-hidden="true">
-          {FLOATING_WORDS.map((word, index) => (
-            <motion.span
-              key={word.text}
-              className="absolute text-lg font-medium text-cream"
-              style={{ left: word.x, top: word.y }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: word.o * 0.75, y: [0, -9, 0] }}
-              transition={{ opacity: { duration: 1, delay: 0.5 + index * 0.1 }, y: { duration: 4 + index * 0.6, repeat: Infinity, ease: "easeInOut" } }}
-            >
-              {word.text}
-            </motion.span>
-          ))}
-        </div>
-
-        <motion.div
-          aria-hidden="true"
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0, y: [0, -10, 0] }}
-          transition={{ opacity: { delay: 0.7, duration: 0.8 }, x: { delay: 0.7, duration: 0.8 }, y: { duration: 6, repeat: Infinity, ease: "easeInOut" } }}
-          className="glass absolute top-[16%] right-[2%] hidden w-72 rounded-3xl p-4 lg:block"
-        >
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">Your assistant is ready</span>
-            <span className="text-mute">00:48</span>
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cream text-ink">
-              <Play size={16} fill="currentColor" />
+    <div className="hero-band marquee z-[5] overflow-hidden lg:absolute lg:inset-x-0 lg:top-[55%]">
+      <div>
+        {row.map((item, index) => (
+          <span key={index} className="flex items-center gap-4 pr-4 text-sm font-medium tracking-wide whitespace-nowrap uppercase sm:text-base" aria-hidden={index >= TICKER.length}>
+            <span className="text-[#5b4d45]">{item.v}</span>
+            {item.k && <strong className="font-extrabold text-ink">{item.k}</strong>}
+            <span className="text-ember" aria-hidden="true">
+              //
             </span>
-            <Waveform bars={24} />
-          </div>
-        </motion.div>
-
-        <motion.div
-          aria-hidden="true"
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0, y: [0, 10, 0] }}
-          transition={{ opacity: { delay: 0.95, duration: 0.8 }, x: { delay: 0.95, duration: 0.8 }, y: { duration: 7, repeat: Infinity, ease: "easeInOut" } }}
-          className="glass absolute right-[9%] bottom-[14%] hidden w-60 rounded-3xl p-4 text-sm lg:block"
-        >
-          <p className="text-xs text-mute">Your tools, connected</p>
-          {["Calendar", "Inbox", "Spreadsheets"].map((tool) => (
-            <p key={tool} className="mt-2 flex items-center gap-2 font-medium">
-              <span className="grid h-5 w-5 place-items-center rounded-full [background:var(--grad)] text-ink">
-                <Check size={12} strokeWidth={3.5} />
-              </span>
-              {tool}
-            </p>
-          ))}
-        </motion.div>
-      </motion.div>
-    </section>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function Tools() {
-  const row = [...TOOLS, ...TOOLS];
+function Hero() {
+  const { openChat } = useChat();
   return (
-    <section aria-label="Tools we work with" className="border-y border-line py-6">
-      <div className="marquee overflow-hidden">
-        <div>
-          {row.map((tool, index) => (
-            <span key={index} className="flex items-center gap-10 pr-10 text-lg whitespace-nowrap text-mute sm:text-xl" aria-hidden={index >= TOOLS.length}>
-              <span className="serif text-2xl text-cream/85">{tool}</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-ember" />
-            </span>
-          ))}
+    <section aria-labelledby="hero-title" className="hero-frame px-2.5 pt-2.5 pb-2.5 sm:px-5 sm:pt-5 sm:pb-5">
+      <div className="stage relative mx-auto flex max-w-[96rem] flex-col overflow-hidden rounded-[1.75rem] pt-28 pb-8 sm:rounded-[2.4rem] lg:block lg:h-[58rem] lg:pt-0 lg:pb-0">
+        <h1 id="hero-title" className="sr-only">
+          AI that fits your business
+        </h1>
+
+        <motion.p
+          aria-hidden="true"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, ease: [0.2, 0.7, 0.2, 1] }}
+          className="hero-word relative z-0 px-5 sm:px-10 lg:absolute lg:top-32 lg:left-6 lg:px-8"
+        >
+          AI that
+          <br />
+          <span className="lg:ml-[0.55em]">fits</span>
+        </motion.p>
+
+        <Ticker />
+
+        <div className="relative z-10 mx-auto -my-4 h-[21rem] sm:h-[30rem] lg:absolute lg:inset-x-0 lg:bottom-0 lg:my-0 lg:h-[92%]">
+          <div className="absolute top-[52%] left-1/2 aspect-square h-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full [background:radial-gradient(closest-side,rgb(255_90_31/0.38),rgb(255_90_31/0.12)_62%,transparent)]" aria-hidden="true" />
+          <Robot className="relative mx-auto h-full w-auto drop-shadow-[0_26px_40px_rgba(90,30,10,0.35)]" />
         </div>
+
+        <motion.p
+          aria-hidden="true"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, delay: 0.12, ease: [0.2, 0.7, 0.2, 1] }}
+          className="hero-word relative z-20 px-5 text-right sm:px-10 lg:absolute lg:right-6 lg:bottom-6 lg:px-8"
+        >
+          your
+          <br />
+          business
+        </motion.p>
+
+        <dl className="relative z-20 mt-6 grid grid-cols-2 gap-4 px-5 sm:px-10 lg:absolute lg:top-32 lg:right-10 lg:mt-0 lg:block lg:space-y-9 lg:px-0 lg:text-right">
+          {[
+            ["24/7", "lead capture, even at night"],
+            ["48h", "from kickoff to live assistant"],
+          ].map(([value, label]) => (
+            <div key={value}>
+              <dt className="text-5xl font-extrabold tracking-[-0.06em] text-ink sm:text-6xl">{value}</dt>
+              <dd className="mt-1 text-sm text-[#5b4d45] sm:text-base">{label}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.25 }}
+          className="relative z-20 mt-8 max-w-md px-5 sm:px-10 lg:absolute lg:bottom-10 lg:left-6 lg:mt-0 lg:px-8"
+        >
+          <p className="text-xl leading-snug font-semibold tracking-tight text-ink sm:text-2xl">We learn how you work, customize an assistant around it and connect your tools.</p>
+          <p className="mt-2 text-base text-[#5b4d45]">The chatbot is just the start.</p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <a href="#/contact" className="stage-cta">
+              Book a free demo
+              <span className="stage-cta-chip">
+                <ArrowUpRight size={18} aria-hidden="true" />
+              </span>
+            </a>
+            <button onClick={() => openChat()} className="inline-flex min-h-12 items-center gap-2 rounded-full px-3 font-semibold text-ink underline decoration-ember decoration-2 underline-offset-4">
+              <RobotHead className="h-7 w-7" /> Talk to Sofía
+            </button>
+          </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -420,7 +406,6 @@ export function Home() {
   return (
     <>
       <Hero />
-      <Tools />
       <Value />
       <Process />
       <MeetSofia />
