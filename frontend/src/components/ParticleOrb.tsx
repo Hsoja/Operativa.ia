@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 
-const COUNT_DESKTOP = 4200;
-const COUNT_MOBILE = 2600;
+const COUNT_DESKTOP = 2600;
+const COUNT_MOBILE = 1600;
+/** Tope de píxeles del lienzo: un canvas enorme en pantalla retina agota la memoria de la GPU. */
+const MAX_PIXELS = 1_400_000;
 
 interface Point {
   x: number;
@@ -42,10 +44,11 @@ export function ParticleOrb({ className = "", energy = 0, density = 1 }: { class
     let pointerY = 0;
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const box = canvas.getBoundingClientRect();
       width = box.width;
       height = box.height;
+      const fit = Math.sqrt(MAX_PIXELS / Math.max(1, width * height));
+      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 1.5, fit));
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

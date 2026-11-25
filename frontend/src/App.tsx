@@ -51,11 +51,6 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <ChatContext.Provider value={chat}>
-        <div className="aurora" aria-hidden="true">
-          <i />
-          <i />
-        </div>
-        <div className="grain" aria-hidden="true" />
         <a href="#main" onClick={(event) => { event.preventDefault(); document.getElementById("main")?.focus(); }} className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-cream focus:px-4 focus:py-2 focus:text-ink">
           Skip to content
         </a>

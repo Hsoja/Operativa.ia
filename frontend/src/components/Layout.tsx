@@ -41,7 +41,7 @@ export function Header({ route }: { route: Route }) {
         initial={{ y: -24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}
-        className={`mx-auto flex h-15 max-w-5xl items-center justify-between rounded-full border border-black/5 bg-[#fbf6f1]/95 py-2 pr-2 pl-5 text-ink backdrop-blur transition-all duration-300 ${
+        className={`mx-auto flex h-15 max-w-5xl items-center justify-between rounded-full border border-black/5 bg-[#fbf6f1]/95 py-2 pr-2 pl-5 text-ink transition-all duration-300 ${
           scrolled || open ? "shadow-2xl shadow-black/30" : "shadow-lg shadow-black/10"
         }`}
       >
@@ -128,7 +128,7 @@ export function Footer() {
   const { openChat } = useChat();
   return (
     <footer className="relative mt-24 overflow-hidden border-t border-line">
-      <div className="absolute -bottom-52 left-1/2 h-96 w-[60rem] max-w-full -translate-x-1/2 rounded-full bg-flame/20 blur-[110px]" />
+      <div className="pointer-events-none absolute -bottom-52 left-1/2 h-96 w-[60rem] max-w-full -translate-x-1/2 [background:radial-gradient(closest-side,rgb(229_23_63/0.22),transparent)]" aria-hidden="true" />
       <div className="shell relative grid gap-10 py-14 md:grid-cols-[1.6fr_1fr_1fr]">
         <div>
           <Logo />
